@@ -124,9 +124,12 @@ summary: "一言でイベントの概要（読者がクリックしたくなる�
 
 `inbox/images/` にファイルがあれば、各画像をVisionで確認して：
 - どの製品セクションの画像かを判定
-- 内容を反映した英語のケバブケース名にリネームして `static/images/{slug}/` にコピー
-  - 例：`IMG_0012.png` → `iphone-18-pro-variable-aperture.png`
-  - ルール：`{製品カテゴリ}-{内容の要点}.{拡張子}`（小文字・ハイフン区切り・英語）
+- 内容を反映した英語のケバブケース名にリネームして `static/images/{event-slug}/` にコピー
+  - ルール：`{カテゴリ}-{トピック}.{拡張子}`（小文字・ハイフン区切り・英語）
+  - 例：`IMG_0012.png` → `iphone-variable-aperture.webp`
+  - 同じカテゴリ・トピックの画像が複数ある場合のみ末尾に `-02`、`-03` を付ける
+  - カテゴリ例：`iphone` / `ipad` / `mac` / `apple-watch` / `airpods` / `vision-pro`
+  - event-slug はイベント名から生成（例：`apple-event-sep-2026`）
 - 該当セクションの適切な位置に挿入（紹介文の直後など文脈に合う場所）
 
 ```markdown
