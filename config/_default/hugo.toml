@@ -12,3 +12,6 @@ defaultContentLanguage = "ja"
 
 # 記事内で絵文字を使えるようにする
 enableEmoji = true
+
+# タクソノミー（タグ等）の先頭を自動で大文字にしない（iPhoneがIPhoneになるのを防ぐ）
+capitalizeListTitles = false
