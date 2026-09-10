@@ -8,5 +8,8 @@ resources/
 # macOS
 .DS_Store
 
+# inbox（処理前の一時ファイル）
+inbox/
+
 # PLANファイルは含めない
 PLAN.md
