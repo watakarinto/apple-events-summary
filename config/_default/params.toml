@@ -1,0 +1,30 @@
+# カラースキーム（slate = グレー系でAppleっぽい雰囲気）
+colorScheme = "slate"
+
+# デフォルトはライトモード
+defaultAppearance = "light"
+
+# OS のダークモード設定に自動で追従する
+autoSwitchAppearance = true
+
+[header]
+  # fixed = スクロールしてもヘッダーが上部に固定される
+  layout = "fixed"
+
+[homepage]
+  # card = 記事をカード形式で並べるレイアウト
+  layout = "card"
+  showRecent = true
+  # トップページに表示する最新記事数
+  showRecentItems = 10
+
+[article]
+  # 記事の公開日を表示する
+  showDate = true
+  # 読了時間は不要なので非表示
+  showReadingTime = false
+  # 目次は不要なので非表示
+  showTableOfContents = false
+  # タグ・カテゴリを表示する
+  showTaxonomies = true
+  showTags = true

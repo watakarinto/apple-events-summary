@@ -1,0 +1,12 @@
+# Hugo ビルド出力（git には含めない）
+public/
+resources/
+
+# Hugo キャッシュ
+.hugo_build.lock
+
+# macOS
+.DS_Store
+
+# PLANファイルは含めない
+PLAN.md

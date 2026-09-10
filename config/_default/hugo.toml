@@ -1,0 +1,14 @@
+# GitHub Pages の公開URL（Actions がビルド時に上書きするのでローカル用の目安）
+baseURL = "https://watakarinto.github.io/apple-events-summary/"
+
+# ブラウザタブ・ヘッダー・RSS タイトルに出る
+title = "Apple Events Summary"
+
+# 使用テーマ（themes/blowfish/ を参照）
+theme = "blowfish"
+
+# <html lang="ja"> と日付フォーマットに反映
+defaultContentLanguage = "ja"
+
+# 記事内で絵文字を使えるようにする
+enableEmoji = true
