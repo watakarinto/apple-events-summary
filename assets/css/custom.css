@@ -1,0 +1,61 @@
+/* Apple-inspired overrides
+   - Neutral: Apple system grays (no color cast)
+   - Primary: near-black for nav/headings — Apple uses dark text, not blue headers
+   - Links/tags: iOS Blue (#007AFF)
+*/
+
+:root {
+  /* Apple system grays */
+  --color-neutral:     255, 255, 255;
+  --color-neutral-50:  249, 249, 249;
+  --color-neutral-100: 245, 245, 247;
+  --color-neutral-200: 229, 229, 231;
+  --color-neutral-300: 209, 209, 214;
+  --color-neutral-400: 174, 174, 178;
+  --color-neutral-500: 142, 142, 147;
+  --color-neutral-600:  99,  99, 102;
+  --color-neutral-700:  72,  72,  74;
+  --color-neutral-800:  44,  44,  46;
+  --color-neutral-900:  29,  29,  31;
+
+  /* Primary = near-black: nav, headings, badges use dark instead of blue */
+  --color-primary-50:  249, 249, 249;
+  --color-primary-100: 245, 245, 247;
+  --color-primary-200: 229, 229, 231;
+  --color-primary-300: 174, 174, 178;
+  --color-primary-400:  99,  99, 102;
+  --color-primary-500:  44,  44,  46;
+  --color-primary-600:  29,  29,  31;
+  --color-primary-700:  18,  18,  18;
+  --color-primary-800:   8,   8,   8;
+  --color-primary-900:   0,   0,   0;
+
+  /* Secondary = iOS Blue for links/accents */
+  --color-secondary-50:  235, 244, 255;
+  --color-secondary-100: 214, 233, 255;
+  --color-secondary-200: 173, 211, 255;
+  --color-secondary-300: 128, 186, 255;
+  --color-secondary-400:  64, 153, 255;
+  --color-secondary-500:   0, 122, 255;
+  --color-secondary-600:   0, 101, 210;
+  --color-secondary-700:   0,  80, 166;
+  --color-secondary-800:   0,  58, 121;
+  --color-secondary-900:   0,  37,  77;
+}
+
+/* Links → iOS Blue (#007AFF) */
+.prose a,
+article a {
+  color: rgba(0, 122, 255, 1) !important;
+}
+.prose a:hover,
+article a:hover {
+  color: rgba(0, 101, 210, 1) !important;
+}
+
+/* Tags → iOS Blue outlined style */
+.tag {
+  border: 1px solid rgba(0, 122, 255, 0.3) !important;
+  color: rgba(0, 122, 255, 1) !important;
+  background: rgba(0, 122, 255, 0.06) !important;
+}

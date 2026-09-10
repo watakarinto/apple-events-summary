@@ -1,5 +1,5 @@
-# カラースキーム（slate = グレー系でAppleっぽい雰囲気）
-colorScheme = "slate"
+# カラースキームのベース（実際の色上書きは assets/css/custom.css で行っている）
+colorScheme = "apple"
 
 # トップページに表示するセクション（これがないと記事が表示されない）
 mainSections = ["posts"]
