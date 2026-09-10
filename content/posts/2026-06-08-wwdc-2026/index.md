@@ -1,12 +1,14 @@
 ---
 title: "WWDC 2026 まとめ — Siri AI、Liquid Glass改良、子どもの安全機能の全貌"
-date: 1970-01-01
+date: 2026-06-08
 draft: false
 tags: ["Apple Intelligence", "iOS", "macOS", "iPadOS", "watchOS"]
 summary: "Google Gemini技術をベースに刷新された「Siri AI」、Liquid Glassの調整スライダ追加、子どもの安全機能の抜本的強化など、WWDC 2026の全発表を網羅的にまとめた。"
 ---
 
 Apple ParkでWWDC 2026が開幕。Craig Federighi が今年の軸として「プラットフォームの改良」「信頼性と安全性」「Apple Intelligenceの飛躍的進化」の3本を掲げた。最大の目玉はSiriを全面刷新した**Siri AI**だ。iOS/iPadOS/macOS/watchOS/tvOS/visionOSが対象で、デベロッパベータは本日公開、パブリックベータは来月、ユーザー向けリリースは今秋の予定。
+
+![Apple Intelligence 機能概要](apple-intelligence-overview.png)
 
 ---
 
@@ -65,6 +67,8 @@ iOS/iPadOS/macOSの検索インフラをゼロから再設計。Spotlight・写�
 - **Apple Vision Pro**：パノラマ写真を空間シーンに変換。環境として使うと思い出が自分を包み込む没入体験に
 - **マップ（Flyover）**：ビジョンインテリジェンスモデルと航空写真を組み合わせ、建築物の細部・木一本一本の形・ガラスの反射光まで高精細にレンダリング
 
+![Liquid Glass を纏った Maps アイコン](maps-icon-liquid-glass.png)
+
 ---
 
 ## 信頼性と安全性 — 子どもの安全機能を抜本強化
@@ -116,6 +120,8 @@ iOS/iPadOS/macOSの検索インフラをゼロから再設計。Spotlight・写�
 ---
 
 ## Siri AI
+
+![Siri AI](siri-ai-title.png)
 
 Siriの全面刷新版。ブランド名が**Siri AI**になった。呼び出し方はこれまでと同じ（「Hey Siri」、サイドボタン、等）。
 
