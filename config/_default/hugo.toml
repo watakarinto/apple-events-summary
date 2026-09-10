@@ -15,3 +15,6 @@ enableEmoji = true
 
 # タクソノミー（タグ等）の先頭を自動で大文字にしない（iPhoneがIPhoneになるのを防ぐ）
 capitalizeListTitles = false
+
+# /images/... をbaseURL込みの絶対URLに変換（GitHub Pagesのサブディレクトリ対応）
+canonifyURLs = true
