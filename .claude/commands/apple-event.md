@@ -124,11 +124,13 @@ summary: "一言でイベントの概要（読者がクリックしたくなる�
 
 `inbox/images/` にファイルがあれば、各画像をVisionで確認して：
 - どの製品セクションの画像かを判定
-- `static/images/{slug}/` にコピー
-- 該当セクションの末尾に挿入
+- 内容を反映した英語のケバブケース名にリネームして `static/images/{slug}/` にコピー
+  - 例：`IMG_0012.png` → `iphone-18-pro-variable-aperture.png`
+  - ルール：`{製品カテゴリ}-{内容の要点}.{拡張子}`（小文字・ハイフン区切り・英語）
+- 該当セクションの適切な位置に挿入（紹介文の直後など文脈に合う場所）
 
 ```markdown
-![{キャプション}](/images/{slug}/{filename})
+![{日本語キャプション}](/images/{slug}/{renamed-filename})
 *出典：Apple*
 ```
 
