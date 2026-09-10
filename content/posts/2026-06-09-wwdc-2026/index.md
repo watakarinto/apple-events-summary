@@ -1,6 +1,6 @@
 ---
 title: "WWDC 2026 まとめ — Siri AI、Liquid Glass改良、子どもの安全機能の全貌"
-date: 2026-06-08
+date: 2026-06-09
 draft: false
 tags: ["Apple Intelligence", "iOS", "macOS", "iPadOS", "watchOS"]
 summary: "Google Gemini技術をベースに刷新された「Siri AI」、Liquid Glassの調整スライダ追加、子どもの安全機能の抜本的強化など、WWDC 2026の全発表を網羅的にまとめた。"

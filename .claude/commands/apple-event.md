@@ -20,15 +20,20 @@ yt-dlp --write-auto-sub --sub-lang en --skip-download \
 ```
 - `inbox/*.vtt` が字幕ファイル
 - `inbox/*.info.json` の `chapters` フィールドをチャプター情報として使う（あれば）
-- `inbox/*.info.json` の `upload_date`（例: `20260909`）を記事の `date` に使う
+- 日付は **JST（日本時間）** でタイムスタンプから取得する
+  ```bash
+  yt-dlp --skip-download --print "%(timestamp)s" <URL> \
+    | xargs -I{} sh -c 'TZ=Asia/Tokyo date -r {} +%Y-%m-%d'
+  ```
 
 **URLがない場合：**
 - `inbox/transcript.txt` を字幕として使う
 - チャプター情報はなしとして扱う
-- **日付の取得**：transcript.txt の1行目がYouTube URLの場合、yt-dlpで取得する
+- **日付の取得**：transcript.txt の1行目がYouTube URLの場合、yt-dlpでJSTで取得する
   ```bash
-  yt-dlp --skip-download --print "%(upload_date)s" <URL>
-  # 例: 20260608 → 2026-06-08
+  URL=$(head -1 inbox/transcript.txt)
+  yt-dlp --skip-download --print "%(timestamp)s" "$URL" \
+    | xargs -I{} sh -c 'TZ=Asia/Tokyo date -r {} +%Y-%m-%d'
   ```
   URLがない、または取得できない場合は `1970-01-01` を仮置きしてユーザーに確認する
 - transcript.txt の日本語タイムスタンプ形式（`0:2727 秒text`）はVTTではないので、行頭の `^\d+:\d+(?:\d+\s*分\s*\d+\s*秒|\d+\s*秒)` パターンを除去してテキストを抽出する
@@ -77,7 +82,7 @@ yt-dlp --write-auto-sub --sub-lang en --skip-download \
 
 ---
 title: "{イベント名} まとめ"
-date: {info.jsonのupload_dateをYYYY-MM-DD形式に変換した日付（例: 20260909 → 2026-09-09）}
+date: {JST（日本時間）での開催日 YYYY-MM-DD}
 draft: false
 tags: [{製品カテゴリ}, ...]
 # タグの方針：

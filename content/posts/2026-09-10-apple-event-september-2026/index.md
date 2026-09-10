@@ -1,6 +1,6 @@
 ---
 title: "Apple Event September 2026 まとめ — iPhone Duo 発表"
-date: 2026-09-09
+date: 2026-09-10
 draft: false
 tags: ["iPhone", "AirPods", "Apple Watch"]
 summary: "iPhone初のフォルダブル「iPhone Duo」を発表。iPhone 18 Pro、AirPods 5、Apple Watch Series 12 / Ultra 4 も刷新。"
