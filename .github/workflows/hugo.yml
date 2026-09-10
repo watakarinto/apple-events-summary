@@ -20,13 +20,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive  # Blowfish テーマ（submodule）を取得するために必要
+          submodules: recursive  # Blowfish（submodule）を取得
 
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@v3
         with:
           hugo-version: latest
-          extended: true  # Blowfish は extended 版が必要
+          extended: true  # Blowfish は extended 版が必須
 
       - name: Setup Pages
         id: pages
