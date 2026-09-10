@@ -67,8 +67,6 @@ draft: false
 tags: [{製品カテゴリ}, ..., {イベント種別}, {西暦年}]
 # タグの方針：
 # - 製品カテゴリ（iPhone / Mac / iPad / Apple Watch / AirPods / Vision Pro など）
-# - イベント種別（iPhone Event / WWDC / Special Event など）
-# - 西暦年（2026 など）
 # 具体的なモデル名（iPhone 18 Pro など）はタグにしない
 summary: "一言でイベントの概要（読者がクリックしたくなる文章）"
 ---
