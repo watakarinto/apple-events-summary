@@ -1,6 +1,9 @@
 # カラースキーム（slate = グレー系でAppleっぽい雰囲気）
 colorScheme = "slate"
 
+# トップページに表示するセクション（これがないと記事が表示されない）
+mainSections = ["posts"]
+
 # デフォルトはライトモード
 defaultAppearance = "light"
 
