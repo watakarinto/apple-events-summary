@@ -24,7 +24,14 @@ yt-dlp --write-auto-sub --sub-lang en --skip-download \
 
 **URLがない場合：**
 - `inbox/transcript.txt` を字幕として使う
-- チャプター情報・日付はなしとして扱い、日付は `1970-01-01` を仮置きしてユーザーに確認する
+- チャプター情報はなしとして扱う
+- **日付の取得**：transcript.txt の1行目がYouTube URLの場合、yt-dlpで取得する
+  ```bash
+  yt-dlp --skip-download --print "%(upload_date)s" <URL>
+  # 例: 20260608 → 2026-06-08
+  ```
+  URLがない、または取得できない場合は `1970-01-01` を仮置きしてユーザーに確認する
+- transcript.txt の日本語タイムスタンプ形式（`0:2727 秒text`）はVTTではないので、行頭の `^\d+:\d+(?:\d+\s*分\s*\d+\s*秒|\d+\s*秒)` パターンを除去してテキストを抽出する
 
 ### 2. 字幕の読み込み
 
