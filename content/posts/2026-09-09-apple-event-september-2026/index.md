@@ -12,7 +12,7 @@ summary: "iPhone初のフォルダブル「iPhone Duo」を発表。iPhone 18 Pr
 
 ## iPhone 18 Pro / Pro Max
 
-![iPhone 18 Pro 機能まとめ](/images/apple-event-sep-2026/iphone-18-pro-overview.png)
+![iPhone 18 Pro 機能まとめ](iphone-18-pro-overview.png)
 *出典：Apple*
 
 今年のiPhone 18 Proの進化は「チップ・バッテリー・カメラ」の3点に集中している。どれも小手先の改善ではなく、かなり思い切った刷新だ。
@@ -59,7 +59,7 @@ iPhone 14以降の下取りで最大$1,200オフ。9月12日（土）予約開�
 
 ## AirPods 5
 
-![AirPods 5 機能まとめ](/images/apple-event-sep-2026/airpods-overview.png)
+![AirPods 5 機能まとめ](airpods-overview.png)
 *出典：Apple*
 
 「オープンイヤーでもANCを」という声に応えた製品。AirPods 4にANC搭載モデルがあったが、今年はそれをさらに強化して**AirPods 5**として刷新された。
@@ -79,10 +79,10 @@ Siri AIとの統合も自然で、「このあたりにカルメンが勧めて�
 
 ## Apple Watch Series 12 / Ultra 4
 
-![Apple Watch Series 12 機能まとめ](/images/apple-event-sep-2026/apple-watch-series-12-overview.png)
+![Apple Watch Series 12 機能まとめ](apple-watch-series-12-overview.png)
 *出典：Apple*
 
-![Apple Watch Ultra 4 機能まとめ](/images/apple-event-sep-2026/apple-watch-ultra-4-overview.png)
+![Apple Watch Ultra 4 機能まとめ](apple-watch-ultra-4-overview.png)
 *出典：Apple*
 
 今年のApple Watchは「聴く」に大きく踏み込んだ。新チップ**S11**（A20 Proベース）と刷新された健康センシングシステムが柱となっている。
@@ -120,7 +120,7 @@ Series 12にはCeramic Shield 2（旧IonXガラス比60%強靭）を採用。本
 
 ## iPhone Duo — Appleのフォルダブル、ついに
 
-![iPhone Duo 機能まとめ](/images/apple-event-sep-2026/iphone-duo-overview.png)
+![iPhone Duo 機能まとめ](iphone-duo-overview.png)
 *出典：Apple*
 
 「One more thing」として登場したのがApple初のフォルダブル、**iPhone Duo**。他社製フォルダブルへの明確な対抗意識が感じられる発表だった。

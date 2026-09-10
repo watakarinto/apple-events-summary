@@ -122,28 +122,35 @@ summary: "一言でイベントの概要（読者がクリックしたくなる�
 
 `inbox/images/` にファイルがあれば、各画像をVisionで確認して：
 - どの製品セクションの画像かを判定
-- 内容を反映した英語のケバブケース名にリネームして `static/images/{event-slug}/` にコピー
+- 内容を反映した英語のケバブケース名にリネームして Page Bundle ディレクトリにコピー
   - ルール：`{カテゴリ}-{トピック}.{拡張子}`（小文字・ハイフン区切り・英語）
-  - 例：`IMG_0012.png` → `iphone-variable-aperture.webp`
+  - 例：`IMG_0012.png` → `iphone-variable-aperture.png`
   - 同じカテゴリ・トピックの画像が複数ある場合のみ末尾に `-02`、`-03` を付ける
   - カテゴリ例：`iphone` / `ipad` / `mac` / `apple-watch` / `airpods` / `vision-pro`
-  - event-slug はイベント名から生成（例：`apple-event-sep-2026`）
 - 該当セクションの適切な位置に挿入（紹介文の直後など文脈に合う場所）
 
 ```markdown
-![{日本語キャプション}](/images/{slug}/{renamed-filename})
+![{日本語キャプション}]({renamed-filename})
 *出典：Apple*
 ```
 
 ### 5. MDファイルの保存
 
-- ファイル名：`content/posts/{YYYY-MM-DD}-{slug}.md`
+Page Bundle 形式で保存する（記事と画像を同じディレクトリに置く）：
+
+```
+content/posts/{YYYY-MM-DD}-{slug}/
+├── index.md        ← 記事本文
+├── iphone-xxx.png  ← 画像（相対パスで参照）
+└── ...
+```
+
 - slug はイベント名から生成（例：`wwdc-2026`）
 
 ### 6. 公開
 
 ```bash
-git add content/posts/ static/images/
+git add content/posts/{YYYY-MM-DD}-{slug}/
 git commit -m "{イベント名} まとめ記事を追加"
 ```
 
