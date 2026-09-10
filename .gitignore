@@ -11,7 +11,6 @@ resources/
 # inbox（処理前の一時ファイル）は中身を除外、ディレクトリ構造は保持
 inbox/*
 !inbox/.gitkeep
-!inbox/transcript.txt
 !inbox/images/
 inbox/images/*
 !inbox/images/.gitkeep
