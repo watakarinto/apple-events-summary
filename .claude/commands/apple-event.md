@@ -158,8 +158,8 @@ git commit -m "{イベント名} まとめ記事を追加"
 
 ## inbox/ の後片付け
 
-公開確認後、必要に応じて手動で削除：
+公開確認後、必要に応じて削除（.gitkeep は残す）：
 ```bash
-rm -rf inbox/*
+find inbox -not -name '.gitkeep' -not -path 'inbox' -not -path 'inbox/images' -delete
 ```
 字幕ファイルは著作権上、長期保存しない（PLANの法律面の整理より）。

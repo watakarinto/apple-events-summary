@@ -8,8 +8,13 @@ resources/
 # macOS
 .DS_Store
 
-# inbox（処理前の一時ファイル）
-inbox/
+# inbox（処理前の一時ファイル）は中身を除外、ディレクトリ構造は保持
+inbox/*
+!inbox/.gitkeep
+!inbox/transcript.txt
+!inbox/images/
+inbox/images/*
+!inbox/images/.gitkeep
 
 # PLANファイルは含めない
 PLAN.md
