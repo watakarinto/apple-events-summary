@@ -64,7 +64,12 @@ yt-dlp --write-auto-sub --sub-lang en --skip-download \
 title: "{イベント名} まとめ"
 date: {info.jsonのupload_dateをYYYY-MM-DD形式に変換した日付（例: 20260909 → 2026-09-09）}
 draft: false
-tags: [{製品名1}, {製品名2}, ...]
+tags: [{製品カテゴリ}, ..., {イベント種別}, {西暦年}]
+# タグの方針：
+# - 製品カテゴリ（iPhone / Mac / iPad / Apple Watch / AirPods / Vision Pro など）
+# - イベント種別（iPhone Event / WWDC / Special Event など）
+# - 西暦年（2026 など）
+# 具体的なモデル名（iPhone 18 Pro など）はタグにしない
 summary: "一言でイベントの概要（読者がクリックしたくなる文章）"
 ---
 
