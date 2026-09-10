@@ -20,10 +20,11 @@ yt-dlp --write-auto-sub --sub-lang en --skip-download \
 ```
 - `inbox/*.vtt` が字幕ファイル
 - `inbox/*.info.json` の `chapters` フィールドをチャプター情報として使う（あれば）
+- `inbox/*.info.json` の `upload_date`（例: `20260909`）を記事の `date` に使う
 
 **URLがない場合：**
 - `inbox/transcript.txt` を字幕として使う
-- チャプター情報はなしとして扱う
+- チャプター情報・日付はなしとして扱い、日付は `1970-01-01` を仮置きしてユーザーに確認する
 
 ### 2. 字幕の読み込み
 
@@ -54,7 +55,7 @@ yt-dlp --write-auto-sub --sub-lang en --skip-download \
 
 ---
 title: "{イベント名} まとめ"
-date: {今日の日付 YYYY-MM-DD}
+date: {info.jsonのupload_dateをYYYY-MM-DD形式に変換した日付（例: 20260909 → 2026-09-09）}
 draft: false
 tags: [{製品名1}, {製品名2}, ...]
 summary: "一言でイベントの概要"
