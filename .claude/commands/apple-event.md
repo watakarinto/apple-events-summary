@@ -173,8 +173,11 @@ git commit -m "{イベント名} まとめ記事を追加"
 
 ## inbox/ の後片付け
 
-公開確認後、必要に応じて削除（.gitkeep は残す）：
+公開確認後に実行（transcript.txt はファイルごと消さず中身だけクリア、画像は削除）：
 ```bash
-find inbox -not -name '.gitkeep' -not -path 'inbox' -not -path 'inbox/images' -delete
+# transcript.txt の中身をクリア（ファイル自体は残す）
+> inbox/transcript.txt
+# images 内のファイルを削除（.gitkeep は残す）
+find inbox/images -not -name '.gitkeep' -not -path 'inbox/images' -delete
 ```
 字幕ファイルは著作権上、長期保存しない（PLANの法律面の整理より）。
