@@ -10,6 +10,9 @@ defaultAppearance = "light"
 # OS のダークモード設定に自動で追従する
 autoSwitchAppearance = true
 
+[footer]
+  showThemeAttribution = false
+
 [header]
   # fixed = スクロールしてもヘッダーが上部に固定される
   layout = "fixed"
