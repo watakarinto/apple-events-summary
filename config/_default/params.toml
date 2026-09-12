@@ -1,6 +1,8 @@
 # カラースキームのベース（実際の色上書きは assets/css/custom.css で行っている）
 colorScheme = "apple"
 
+enableSearch = true
+
 # トップページに表示するセクション（これがないと記事が表示されない）
 mainSections = ["posts"]
 
@@ -9,6 +11,9 @@ defaultAppearance = "light"
 
 # OS のダークモード設定に自動で追従する
 autoSwitchAppearance = true
+
+[footer]
+  showThemeAttribution = false
 
 [header]
   # fixed = スクロールしてもヘッダーが上部に固定される
@@ -27,7 +32,7 @@ autoSwitchAppearance = true
   # 読了時間は不要なので非表示
   showReadingTime = false
   # 目次は不要なので非表示
-  showTableOfContents = false
+  showTableOfContents = true
   # タグ・カテゴリを表示する
   showTaxonomies = true
   showTags = true

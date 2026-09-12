@@ -1,0 +1,15 @@
+disabled = false
+locale = "en"
+label = "English"
+weight = 1
+title = "Apple Events Summary"
+
+[params]
+  displayName = "EN"
+  isoCode = "en"
+  rtl = false
+  dateFormat = "2006-01-02"
+  description = "Apple Eventの発表内容を製品ごとに日本語で要約（非公式）"
+
+[params.author]
+  name = "watakarinto"
