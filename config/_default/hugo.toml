@@ -18,3 +18,7 @@ capitalizeListTitles = false
 
 # /images/... をbaseURL込みの絶対URLに変換（GitHub Pagesのサブディレクトリ対応）
 canonifyURLs = true
+
+# 検索インデックス用（Blowfish の enableSearch に必要）
+[outputs]
+  home = ["HTML", "RSS", "JSON"]
