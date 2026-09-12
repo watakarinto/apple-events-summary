@@ -47,6 +47,8 @@ Claude が画像の内容を見て、該当セクションに自動で挿入す�
 
 ---
 
+
+
 ## ディレクトリ構成
 
 ```
@@ -68,6 +70,6 @@ brew install mise yt-dlp
 git clone --recurse-submodules https://github.com/watakarinto/apple-events-summary
 cd apple-events-summary
 mise install
-hugo server -D --baseURL http://localhost:1313/  # http://localhost:1313 でプレビュー
+hugo server -D  # http://localhost:1313 でプレビュー
 ```
 

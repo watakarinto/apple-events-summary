@@ -35,6 +35,14 @@ jobs:
       - name: Build
         run: hugo --minify --baseURL "${{ steps.pages.outputs.base_url }}/"
 
+      - name: Verify search index
+        # index.json の permalink が絶対URL（https://）かを確認する
+        # layouts/_default/index.json で .Permalink を使っているが、
+        # テーマ更新で .RelPermalink（相対URL）に戻ると検索結果クリックで 404 になるため
+        # jq -e: 評価結果が false/null のとき終了コード 1（CI 失敗）
+        # all(.[]; ...): 配列の全要素が条件を満たすか確認
+        run: jq -e 'all(.[]; .permalink | startswith("https://"))' public/index.json
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
