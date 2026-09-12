@@ -30,7 +30,7 @@ autoSwitchAppearance = true
   # 読了時間は不要なので非表示
   showReadingTime = false
   # 目次は不要なので非表示
-  showTableOfContents = false
+  showTableOfContents = true
   # タグ・カテゴリを表示する
   showTaxonomies = true
   showTags = true
