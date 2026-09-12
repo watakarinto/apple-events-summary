@@ -8,7 +8,7 @@ title = "Apple Events Summary"
 theme = "blowfish"
 
 # <html lang="ja"> と日付フォーマットに反映
-defaultContentLanguage = "ja"
+defaultContentLanguage = "en"
 
 # 記事内で絵文字を使えるようにする
 enableEmoji = true
