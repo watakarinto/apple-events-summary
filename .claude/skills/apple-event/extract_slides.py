@@ -14,11 +14,12 @@ import sys
 import json
 import email
 import io
+import shutil
 import subprocess
 import concurrent.futures
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 INBOX = PROJECT_ROOT / "inbox"
 
 
@@ -185,7 +186,7 @@ def download_sections_parallel(url, chapter_timestamps):
             [
                 "yt-dlp",
                 "--download-sections", f"*{ts_start}-{ts_end}",
-                "-f", "bestvideo[ext=mp4]",
+                "-f", "bestvideo[ext=mp4][height<=1080]",
                 "-o", out,
                 url,
             ],
@@ -229,13 +230,14 @@ def extract_section_grids(section_paths):
 
     for slug, mp4_path in section_paths.items():
         frames_dir = out_dir / slug
-        frames_dir.mkdir(exist_ok=True)
+        shutil.rmtree(frames_dir, ignore_errors=True)
+        frames_dir.mkdir()
 
-        # 1920x1080 で保存（記事用）。アスペクト比維持のため -2 で丸める
+        # 1fps・スケーリングなしで保存（1080pをそのまま記事用に使う）
         result = subprocess.run(
             [
                 "ffmpeg", "-i", mp4_path,
-                "-vf", "fps=2,scale=1920:-2",
+                "-vf", "fps=1",
                 str(frames_dir / "frame_%03d.jpg"),
                 "-y",
             ],
