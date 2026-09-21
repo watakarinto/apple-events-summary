@@ -1,3 +1,8 @@
+---
+name: apple-event
+description: Apple Event の字幕から製品ごとの日本語まとめ記事を生成してローカルコミットする。
+---
+
 # /apple-event
 
 Apple Event の字幕から製品ごとの日本語まとめ記事を生成してローカルコミットする。
@@ -50,7 +55,7 @@ yt-dlp --write-auto-sub --sub-lang en --skip-download \
 #### 3-1. スクリプトでストーリーボード取得・フレーム抽出・グリッド作成を一括実行
 
 ```bash
-python3 scripts/extract_slides.py <URL>
+python3 .claude/skills/apple-event/extract_slides.py <URL>
 ```
 
 このスクリプトが以下をすべて行う：
@@ -82,7 +87,7 @@ python3 scripts/extract_slides.py <URL>
 特定したタイムスタンプを渡してスクリプトを呼ぶ：
 
 ```bash
-python3 scripts/extract_slides.py download <URL> \
+python3 .claude/skills/apple-event/extract_slides.py download <URL> \
   '<chapter_slug>:<timestamp_sec>' \
   '<chapter_slug>:<timestamp_sec>' \
   ...
