@@ -98,7 +98,7 @@ python3 .claude/skills/apple-event/extract_slides.py download <URL> \
 
 スクリプトが以下を行う：
 - 各チャプターの指定範囲を**並列DL**（ThreadPoolExecutor）
-- 2fps・**1920x1080** でフレーム抽出（記事用高解像度）
+- 1fps・**1080p** でフレーム抽出（記事用高解像度）
 - フレームグリッド画像を `inbox/section_frames/{slug}_grid.jpg` に保存
 
 #### 3-4. セクショングリッドを確認 → 最終フレームを選択
@@ -232,8 +232,19 @@ summary: "一言でイベントの概要（読者がクリックしたくなる�
 
 ### 6. MDファイルの保存
 
-Page Bundle 形式で保存する（記事と画像を同じディレクトリに置く）：
+Page Bundle 形式で保存する。**以下の順番で実行すること。**
 
+```bash
+# ① ディレクトリ作成
+mkdir -p content/posts/{YYYY-MM-DD}-{slug}/
+
+# ② inbox/images/ にある画像をすべてコピー（-overview.jpg 含む）
+cp inbox/images/* content/posts/{YYYY-MM-DD}-{slug}/ 2>/dev/null || true
+
+# ③ index.md を保存（Write ツールで作成）
+```
+
+最終的な構造：
 ```
 content/posts/{YYYY-MM-DD}-{slug}/
 ├── index.md              ← 記事本文
