@@ -1,11 +1,11 @@
 # /apple-event
 
-Apple Event の字幕から製品ごとの日本語まとめ記事を生成して公開する。
+Apple Event の字幕から製品ごとの日本語まとめ記事を生成してローカルコミットする。
 
 ## 使い方
 
 ```
-/apple-event <YouTube URL>   # URLから字幕を自動取得
+/apple-event <YouTube URL>   # URLから字幕・画像を自動取得
 /apple-event                 # inbox/transcript.txt を使う
 ```
 
@@ -43,7 +43,69 @@ yt-dlp --write-auto-sub --sub-lang en --skip-download \
 - VTT形式の場合はタイムスタンプ行を除去してテキストのみ抽出
 - 重複行（VTTの仕様で同じ行が続く）を除去して読みやすくする
 
-### 3. 製品ごとに日本語まとめを生成
+### 3. ストーリーボード取得とモザイクスライド特定（URLがある場合）
+
+**URLがない場合はこのステップをスキップする。**
+
+#### 3-1. スクリプトでストーリーボード取得・フレーム抽出・グリッド作成を一括実行
+
+```bash
+python3 scripts/extract_slides.py <URL>
+```
+
+このスクリプトが以下をすべて行う：
+- ストーリーボード（sb0）を取得
+- フレームを `inbox/storyboard_frames/` に抽出
+- 各チャプターの末尾30%フレームをグリッド画像化 → `inbox/chapter_grids/{slug}.jpg`
+- チャプター情報をJSON形式でstdoutに出力（タイムスタンプ・グリッドパス）
+
+スクリプトがエラーを出した場合は内容を確認して対処し、このステップをスキップして画像なしで記事生成に進む。
+
+#### 3-2. 全チャプターのグリッドを確認 → タイムスタンプを特定
+
+スクリプトが出力したJSON（チャプターごとの `grid_path`）を参照し、
+`inbox/chapter_grids/` にある全グリッド画像を**一度に**確認する。
+
+各グリッドについて以下を判定する：
+
+```
+「製品の機能・特徴をタイル状グリッドに並べたまとめスライド
+（中央に製品名ロゴ、周囲に各機能の画像とキャプションが並ぶApple特有のスライド）」が
+含まれているフレームのラベル（t04500 のようなタイムスタンプ表示）を答える。
+見当たらない場合は「なし」。
+```
+
+グリッドのラベル `t{TTTTT}` がそのままタイムスタンプ（秒）。ファイル検索は不要。
+
+#### 3-3. 部分DLとフレームグリッド作成をスクリプトで実行
+
+特定したタイムスタンプを渡してスクリプトを呼ぶ：
+
+```bash
+python3 scripts/extract_slides.py download <URL> \
+  '<chapter_slug>:<timestamp_sec>' \
+  '<chapter_slug>:<timestamp_sec>' \
+  ...
+```
+
+`<timestamp_sec>` はグリッドラベル `t04500` の数値部分（例: `4500`）。整数で渡す。
+スクリプト側で ±30秒の範囲を自動でDLする。
+
+スクリプトが以下を行う：
+- 各チャプターの指定範囲を**並列DL**（ThreadPoolExecutor）
+- 2fps・**1920x1080** でフレーム抽出（記事用高解像度）
+- フレームグリッド画像を `inbox/section_frames/{slug}_grid.jpg` に保存
+
+#### 3-4. セクショングリッドを確認 → 最終フレームを選択
+
+`inbox/section_frames/{slug}_grid.jpg` を確認し、モザイクスライドのフレーム番号（グリッドの連番）を特定する。
+
+特定したフレーム（例: フレーム番号 `42` なら `inbox/section_frames/{slug}/frame_042.jpg`）を
+`inbox/images/{product}-overview.jpg` にコピーする。このファイルは 1920x1080 の高解像度版。
+
+「なし」の場合はそのチャプターの画像をスキップし、記事に画像挿入しない。
+
+### 4. 製品ごとに日本語まとめを生成
 
 以下のプロンプトでClaudeが処理する：
 
@@ -56,6 +118,11 @@ yt-dlp --write-auto-sub --sub-lang en --skip-download \
 
 字幕：
 {transcript}
+
+[取得した画像がある場合]
+各製品のまとめスライド画像：
+{product}: {image_path}
+...
 
 指示：
 1. 字幕を読み、製品・トピックごとにセクションを分割する
@@ -96,6 +163,10 @@ summary: "一言でイベントの概要（読者がクリックしたくなる�
 ---
 
 ## {製品名1}
+
+[まとめスライド画像がある場合]
+![{製品名} 機能まとめ]({product}-overview.jpg)
+*出典：Apple*
 
 {この製品の「何がすごいか」を1〜2文で。読者が続きを読みたくなる導入。}
 
@@ -138,9 +209,9 @@ summary: "一言でイベントの概要（読者がクリックしたくなる�
 {締めの一言。どの製品が特に注目か、どう選ぶかなどの軽い編集コメント。}
 ```
 
-### 4. inbox/images/ の振り分け（画像がある場合）
+### 5. inbox/images/ の振り分け（手動画像がある場合）
 
-`inbox/images/` にファイルがあれば、各画像をVisionで確認して：
+ストーリーボード取得分以外に `inbox/images/` にファイルがあれば、各画像をVisionで確認して：
 - どの製品セクションの画像かを判定
 - 内容を反映した英語のケバブケース名にリネームして Page Bundle ディレクトリにコピー
   - ルール：`{カテゴリ}-{トピック}.{拡張子}`（小文字・ハイフン区切り・英語）
@@ -154,35 +225,43 @@ summary: "一言でイベントの概要（読者がクリックしたくなる�
 *出典：Apple*
 ```
 
-### 5. MDファイルの保存
+### 6. MDファイルの保存
 
 Page Bundle 形式で保存する（記事と画像を同じディレクトリに置く）：
 
 ```
 content/posts/{YYYY-MM-DD}-{slug}/
-├── index.md        ← 記事本文
-├── iphone-xxx.png  ← 画像（相対パスで参照）
+├── index.md              ← 記事本文
+├── {product}-overview.jpg  ← ストーリーボードから取得したまとめスライド
+├── {other-image}.png     ← inbox/images/ から振り分けた画像
 └── ...
 ```
 
 - slug はイベント名から生成（例：`wwdc-2026`）
 
-### 6. 公開
+### 7. ローカルコミット
 
 ```bash
 git add content/posts/{YYYY-MM-DD}-{slug}/
 git commit -m "{イベント名} まとめ記事を追加"
 ```
 
-コミット後、ユーザーに確認してからpushする。
+**pushはしない。** コミット完了をユーザーに伝えて終了する。
 
 ## inbox/ の後片付け
 
-公開確認後に実行（transcript.txt はファイルごと消さず中身だけクリア、画像は削除）：
+コミット後に実行（中間ファイルをすべて削除）：
+
 ```bash
+# 字幕・storyboard・中間ファイルを削除
+rm -f inbox/*.vtt inbox/*.json inbox/*.mhtml
+rm -rf inbox/storyboard_frames/ inbox/chapter_grids/ inbox/sections/ inbox/section_frames/
+
 # transcript.txt の中身をクリア（ファイル自体は残す）
 > inbox/transcript.txt
+
 # images 内のファイルを削除（.gitkeep は残す）
 find inbox/images -not -name '.gitkeep' -not -path 'inbox/images' -delete
 ```
+
 字幕ファイルは著作権上、長期保存しない（PLANの法律面の整理より）。
