@@ -3,11 +3,15 @@
 Apple Event まとめスライド抽出スクリプト
 
 Usage:
-    python3 scripts/extract_slides.py <YouTube URL>
+    python3 extract_slides.py <YouTube URL>
         → storyboard取得・フレーム抽出・チャプターグリッド作成
 
-    python3 scripts/extract_slides.py download <URL> slug:ts slug:ts ...
-        → 指定タイムスタンプ(秒)周辺を並列DL・フレーム抽出・セクショングリッド作成
+    python3 extract_slides.py download <URL> slug:ts slug:ts ...
+        → スカウトDL（360p以下 ±120s）→ グリッド作成
+        → グリッドでモザイクフレーム番号を確認後 finalize を実行
+
+    python3 extract_slides.py finalize <URL> slug:frame_num slug:frame_num ...
+        → スカウトで特定したフレームを 1080p ±10s で本番DL・グリッド作成
 """
 
 import sys
@@ -76,7 +80,6 @@ def extract_frames(sb_path, info):
         print("[error] ストーリーボードにWebP画像が見つかりませんでした", file=sys.stderr)
         sys.exit(1)
 
-    # info.json の storyboard フォーマットからグリッド寸法を読む
     sb_fmt = next(
         (f for f in info.get("formats", []) if f.get("format_id") == "sb0"),
         None,
@@ -121,7 +124,6 @@ def make_chapter_grids(info, interval):
         print("[warn] チャプター情報がありません。動画全体を1チャプターとして扱います", file=sys.stderr)
         chapters = [{"title": "Full Event", "start_time": 0, "end_time": duration}]
     else:
-        # end_time を補完
         for i, ch in enumerate(chapters):
             if "end_time" not in ch:
                 ch["end_time"] = chapters[i + 1]["start_time"] if i + 1 < len(chapters) else duration
@@ -157,13 +159,11 @@ def make_chapter_grids(info, interval):
             img = Image.open(fpath).resize((tw, th), Image.LANCZOS)
             x, y = col * tw, row * (th + lh)
             grid.paste(img, (x, y))
-            # ラベルはタイムスタンプ（秒）を直接表示。Claude がそのまま slug:ts として渡せる
             ts = fpath.stem.split("_t")[1].replace("s", "")
             ImageDraw.Draw(grid).text((x + 1, y + th + 1), f"t{ts}", fill=(200, 200, 100))
 
         grid_path = str(out_dir / f"{slug}.jpg")
         grid.save(grid_path, quality=85)
-        # モザイクスライドはチャプター終端の約90秒前に現れる経験則
         recommended_ts = max(int(start), int(end) - 90)
         result[slug] = {
             "title": ch["title"],
@@ -178,20 +178,27 @@ def make_chapter_grids(info, interval):
     return result
 
 
-def download_sections_parallel(url, chapter_timestamps):
-    """各チャプターの指定タイムスタンプ周辺を並列DLする"""
+def download_sections_scout(url, chapter_timestamps):
+    """スカウトフェーズ：360p以下・±120s で並列DL
+
+    モザイクスライドのフレーム番号特定用。低解像度で広いウィンドウを取得する。
+    メタデータ（ts_start）を section_frames/{slug}_scout.json に保存する。
+    戻り値のキーは "{slug}_scout" 形式で、extract_section_grids がそのまま使える。
+    """
     out_dir = INBOX / "sections"
+    meta_dir = INBOX / "section_frames"
     out_dir.mkdir(parents=True, exist_ok=True)
+    meta_dir.mkdir(parents=True, exist_ok=True)
 
     def download(slug, ts):
-        ts_start = max(0, ts - 60)
-        ts_end = ts + 60
-        out = str(out_dir / f"{slug}.mp4")
+        ts_start = max(0, ts - 120)
+        ts_end = ts + 120
+        out = str(out_dir / f"{slug}_scout.mp4")
         result = subprocess.run(
             [
                 "yt-dlp",
                 "--download-sections", f"*{ts_start}-{ts_end}",
-                "-f", "bestvideo[ext=mp4][height<=1440]",
+                "-f", "bestvideo[height<=360]",
                 "--force-overwrite",
                 "-o", out,
                 url,
@@ -201,13 +208,67 @@ def download_sections_parallel(url, chapter_timestamps):
             text=True,
         )
         if result.returncode != 0:
-            print(f"[error] {slug}: yt-dlp 失敗 (code={result.returncode})\n{result.stderr}", file=sys.stderr)
+            print(f"[error] {slug}: スカウトDL失敗 (code={result.returncode})\n{result.stderr}", file=sys.stderr)
             raise subprocess.CalledProcessError(result.returncode, "yt-dlp")
-        print(f"[ok] {slug}: {ts_start}s-{ts_end}s DL完了", file=sys.stderr)
-        return slug, out
+        meta = {"slug": slug, "ts_center": ts, "ts_start": ts_start}
+        (meta_dir / f"{slug}_scout.json").write_text(json.dumps(meta, ensure_ascii=False))
+        print(f"[ok] {slug}: スカウトDL完了 ({ts_start}s-{ts_end}s, 360p以下)", file=sys.stderr)
+        return f"{slug}_scout", out
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
         futures = {ex.submit(download, slug, ts): slug for slug, ts in chapter_timestamps.items()}
+        results = {}
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                key, path = future.result()
+                results[key] = path
+            except Exception as e:
+                slug = futures[future]
+                print(f"[error] {slug}: {e}", file=sys.stderr)
+    return results
+
+
+def finalize_sections(url, slug_frame_nums):
+    """本番フェーズ：スカウトで特定したフレームを 1080p ±10s でDL
+
+    slug_frame_nums: {slug: frame_num} — スカウトグリッドのフレーム番号
+    戻り値のキーは "{slug}" 形式。
+    """
+    out_dir = INBOX / "sections"
+    meta_dir = INBOX / "section_frames"
+
+    def finalize(slug, frame_num):
+        meta_path = meta_dir / f"{slug}_scout.json"
+        if not meta_path.exists():
+            raise FileNotFoundError(
+                f"スカウトメタデータが見つかりません: {meta_path}\n先に download を実行してください"
+            )
+        meta = json.loads(meta_path.read_text())
+        exact_ts = meta["ts_start"] + frame_num - 1
+        ts_start = max(0, exact_ts - 10)
+        ts_end = exact_ts + 10
+        out = str(out_dir / f"{slug}.mp4")
+        result = subprocess.run(
+            [
+                "yt-dlp",
+                "--download-sections", f"*{ts_start}-{ts_end}",
+                "-f", "bestvideo[ext=mp4][height<=1080]",
+                "--force-overwrite",
+                "-o", out,
+                url,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            print(f"[error] {slug}: 本番DL失敗 (code={result.returncode})\n{result.stderr}", file=sys.stderr)
+            raise subprocess.CalledProcessError(result.returncode, "yt-dlp")
+        print(f"[ok] {slug}: 本番DL完了 ({ts_start}s-{ts_end}s, 1080p, exact_ts={exact_ts})", file=sys.stderr)
+        return slug, out
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
+        futures = {ex.submit(finalize, slug, n): slug for slug, n in slug_frame_nums.items()}
         results = {}
         for future in concurrent.futures.as_completed(futures):
             try:
@@ -215,16 +276,12 @@ def download_sections_parallel(url, chapter_timestamps):
                 results[slug] = path
             except Exception as e:
                 slug = futures[future]
-                print(f"[error] {slug}: DL失敗 - {e}", file=sys.stderr)
+                print(f"[error] {slug}: {e}", file=sys.stderr)
     return results
 
 
 def extract_section_grids(section_paths):
-    """各セクション動画からフレームを抽出してグリッド画像を作る
-
-    フレームは 1920x1080 で保存する（記事に使う高解像度版）。
-    グリッド画像はそれを縮小してメモリ上で構成する。
-    """
+    """各セクション動画からフレームを抽出してグリッド画像を作る"""
     try:
         from PIL import Image, ImageDraw
     except ImportError:
@@ -239,7 +296,6 @@ def extract_section_grids(section_paths):
         shutil.rmtree(frames_dir, ignore_errors=True)
         frames_dir.mkdir()
 
-        # 1fps・スケーリングなしで保存（1080pをそのまま記事用に使う）
         result = subprocess.run(
             [
                 "ffmpeg", "-i", mp4_path,
@@ -261,7 +317,6 @@ def extract_section_grids(section_paths):
             print(f"[warn] {slug}: フレーム抽出結果なし", file=sys.stderr)
             continue
 
-        # グリッド作成（PIL でリサイズ、元ファイルは高解像度のまま残す）
         cols = 10
         tw, th, lh = 64, 36, 10
         rows_count = (len(frame_files) + cols - 1) // cols
@@ -288,35 +343,50 @@ def extract_section_grids(section_paths):
     return grids
 
 
+def _parse_slug_int_args(args):
+    result = {}
+    for arg in args:
+        parts = arg.split(":")
+        if len(parts) != 2:
+            print(f"[error] 引数の形式が不正です: {arg!r}  (期待形式: slug:数値)", file=sys.stderr)
+            sys.exit(1)
+        slug, val = parts
+        try:
+            result[slug] = int(val)
+        except ValueError:
+            print(f"[error] 数値ではありません: {val!r}", file=sys.stderr)
+            sys.exit(1)
+    return result
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage:")
-        print("  python3 scripts/extract_slides.py <URL>")
+        print("  python3 extract_slides.py <URL>")
         print("    → ストーリーボード取得・フレーム抽出・チャプターグリッド作成")
-        print("  python3 scripts/extract_slides.py download <URL> slug1:ts1 slug2:ts2 ...")
-        print("    → 指定タイムスタンプを並列DL・フレーム抽出・セクショングリッド作成")
+        print("  python3 extract_slides.py download <URL> slug1:ts1 slug2:ts2 ...")
+        print("    → スカウトDL (360p ±120s) → グリッド作成")
+        print("  python3 extract_slides.py finalize <URL> slug1:frame_num1 slug2:frame_num2 ...")
+        print("    → 本番DL (1080p ±10s) → グリッド作成")
         sys.exit(1)
 
     if sys.argv[1] == "download":
         if len(sys.argv) < 4:
             print("[error] download モードには URL と slug:ts の指定が必要です", file=sys.stderr)
             sys.exit(1)
-
         url = sys.argv[2]
-        chapter_timestamps = {}
-        for arg in sys.argv[3:]:
-            parts = arg.split(":")
-            if len(parts) != 2:
-                print(f"[error] 引数の形式が不正です: {arg!r}  (期待形式: slug:秒数)", file=sys.stderr)
-                sys.exit(1)
-            slug, ts_str = parts
-            try:
-                chapter_timestamps[slug] = int(ts_str)
-            except ValueError:
-                print(f"[error] タイムスタンプが整数ではありません: {ts_str!r}", file=sys.stderr)
-                sys.exit(1)
+        chapter_timestamps = _parse_slug_int_args(sys.argv[3:])
+        section_paths = download_sections_scout(url, chapter_timestamps)
+        section_grids = extract_section_grids(section_paths)
+        print(json.dumps(section_grids, ensure_ascii=False, indent=2))
 
-        section_paths = download_sections_parallel(url, chapter_timestamps)
+    elif sys.argv[1] == "finalize":
+        if len(sys.argv) < 4:
+            print("[error] finalize モードには URL と slug:frame_num の指定が必要です", file=sys.stderr)
+            sys.exit(1)
+        url = sys.argv[2]
+        slug_frame_nums = _parse_slug_int_args(sys.argv[3:])
+        section_paths = finalize_sections(url, slug_frame_nums)
         section_grids = extract_section_grids(section_paths)
         print(json.dumps(section_grids, ensure_ascii=False, indent=2))
 

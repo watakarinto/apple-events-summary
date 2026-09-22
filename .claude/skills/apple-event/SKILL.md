@@ -66,7 +66,7 @@ python3 .claude/skills/apple-event/extract_slides.py <URL>
 
 スクリプトがエラーを出した場合は内容を確認して対処し、このステップをスキップして画像なしで記事生成に進む。
 
-#### 3-2. チャプターグリッドを確認 → タイムスタンプを特定し部分DL
+#### 3-2. チャプターグリッドを確認 → タイムスタンプを特定しスカウトDL
 
 3-1 で作成した `inbox/chapter_grids/{slug}.jpg` を Read ツールで表示し、
 モザイク（機能一覧）スライドが映っているフレームのタイムスタンプ（グリッドに `t{秒}` 形式で表示）を特定する。
@@ -83,15 +83,34 @@ python3 .claude/skills/apple-event/extract_slides.py download <URL> \
 ```
 
 スクリプトが以下を行う：
-- 各チャプターの指定タイムスタンプ ±30秒を**並列DL**（ThreadPoolExecutor）
-- 1fps・**1080p** でフレーム抽出（記事用高解像度）
+- 各チャプターの指定タイムスタンプ ±120秒を**360p以下で並列DL**（スカウト）
+- 1fps でフレーム抽出（240フレーム）
+- スカウトグリッド画像を `inbox/section_frames/{slug}_scout_grid.jpg` に保存
+- タイムスタンプメタデータを `inbox/section_frames/{slug}_scout.json` に保存
+
+**なぜ2段階か：** HLSストリームとストーリーボードのタイムスタンプは製品ごとに15〜80秒ずれることがある。±120sの広いウィンドウで確実にモザイクを捉え、確認後に1080pで精密DLする。
+
+#### 3-3. スカウトグリッドを確認 → フレーム番号を特定して本番DL
+
+`inbox/section_frames/{slug}_scout_grid.jpg` を確認し、モザイクスライドのフレーム番号（グリッドの連番）を特定する。
+
+```bash
+python3 .claude/skills/apple-event/extract_slides.py finalize <URL> \
+  '<chapter_slug>:<frame_num>' \
+  '<chapter_slug>:<frame_num>' \
+  ...
+```
+
+スクリプトが以下を行う：
+- スカウトメタデータからフレーム番号→実秒数を計算（`ts_start + frame_num - 1`）
+- その秒数 ±10秒を**1080pで並列DL**（20フレームのみ）
 - フレームグリッド画像を `inbox/section_frames/{slug}_grid.jpg` に保存
 
-#### 3-3. セクショングリッドを確認 → 最終フレームを選択
+#### 3-4. 本番グリッドを確認 → 最終フレームを選択
 
-`inbox/section_frames/{slug}_grid.jpg` を確認し、モザイクスライドのフレーム番号（グリッドの連番）を特定する。
+`inbox/section_frames/{slug}_grid.jpg`（20フレーム）を確認し、アニメーション完成状態のフレームを選ぶ。
 
-特定したフレーム（例: フレーム番号 `42` なら `inbox/section_frames/{slug}/frame_042.jpg`）を
+特定したフレーム（例: フレーム番号 `15` なら `inbox/section_frames/{slug}/frame_015.jpg`）を
 `inbox/images/{product}-overview.jpg` にコピーする。このファイルは 1920x1080 の高解像度版。
 
 「なし」の場合はそのチャプターの画像をスキップし、記事に画像挿入しない。
