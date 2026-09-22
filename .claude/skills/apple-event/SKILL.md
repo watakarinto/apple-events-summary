@@ -66,52 +66,43 @@ python3 .claude/skills/apple-event/extract_slides.py <URL>
 
 スクリプトがエラーを出した場合は内容を確認して対処し、このステップをスキップして画像なしで記事生成に進む。
 
-#### 3-2. チャプターグリッドを確認 → タイムスタンプを特定しスカウトDL
-
-3-1 で作成した `inbox/chapter_grids/{slug}.jpg` を Read ツールで表示し、
-モザイク（機能一覧）スライドが映っているフレームのタイムスタンプ（グリッドに `t{秒}` 形式で表示）を特定する。
-
-- 見つかった場合はそのタイムスタンプ（整数秒）を `slug:ts` として使う
-- 見つからない場合は JSON 出力の `recommended_ts`（チャプター終端-90秒）を初期値として試す
-- Introduction チャプターはモザイクスライドがないためスキップする
+#### 3-2. モザイクスライドを自動抽出（推奨）
 
 ```bash
-python3 .claude/skills/apple-event/extract_slides.py download <URL> \
-  '<chapter_slug>:<ts>' \
-  '<chapter_slug>:<ts>' \
-  ...
+python3 .claude/skills/apple-event/extract_slides.py auto <URL>
 ```
 
-スクリプトが以下を行う：
-- 各チャプターの指定タイムスタンプ ±120秒を**360p以下で並列DL**（スカウト）
-- 0.5fps でフレーム抽出（120フレーム）
-- スカウトグリッド画像を `inbox/section_frames/{slug}_scout_grid.jpg` に保存
-- タイムスタンプメタデータを `inbox/section_frames/{slug}_scout.json` に保存
+以下をすべて自動実行する：
+- ストーリーボードから各チャプターのモザイク候補タイムスタンプを自動検出（色多様性・エッジ密度スコアリング）
+- スカウト DL（360p ±120s、0.5fps = 120フレーム）→ 自動フレーム選択
+- 本番 DL（1080p ±10s）→ 自動フレーム選択
+- `inbox/images/{slug}-overview.jpg` に自動コピー
+- stdout に結果 JSON を出力（`image` パス・`final_frame` 番号・`grid_path`）
 
-**なぜ2段階か：** HLSストリームとストーリーボードのタイムスタンプは製品ごとに15〜80秒ずれることがある。±120sの広いウィンドウで確実にモザイクを捉え、確認後に1080pで精密DLする。
+完了後、stdout JSON の `grid_path` の画像を Read ツールで確認し、意図通りのモザイクスライドが取れているか検証する。問題があれば 3-3 で手動補正する。
 
-#### 3-3. スカウトグリッドを確認 → フレーム番号を特定して本番DL
+特定チャプターのタイムスタンプを手動指定したい場合（storyboard 検出より精度が高い場合など）：
+```bash
+python3 .claude/skills/apple-event/extract_slides.py auto <URL> \
+  '<chapter_slug>:<ts>' ...
+```
 
-`inbox/section_frames/{slug}_scout_grid.jpg` を確認し、モザイクスライドのフレーム番号（グリッドの連番）を特定する。
+#### 3-3. 手動補正（自動検出が失敗した製品のみ）
+
+自動検出結果を確認後、問題のある製品だけ手動で再実行する。
 
 ```bash
-python3 .claude/skills/apple-event/extract_slides.py finalize <URL> \
-  '<chapter_slug>:<frame_num>' \
-  '<chapter_slug>:<frame_num>' \
-  ...
+# スカウトからやり直す場合
+python3 .claude/skills/apple-event/extract_slides.py download <URL> '<slug>:<ts>'
+# → inbox/section_frames/{slug}_scout_grid.jpg を確認し frame_num を特定
+python3 .claude/skills/apple-event/extract_slides.py finalize <URL> '<slug>:<frame_num>'
+# → inbox/section_frames/{slug}_grid.jpg を確認し最良フレームを特定
 ```
 
-スクリプトが以下を行う：
-- スカウトメタデータからフレーム番号→実秒数を計算（`ts_start + frame_num - 1`）
-- その秒数 ±10秒を**1080pで並列DL**（20フレームのみ）
-- フレームグリッド画像を `inbox/section_frames/{slug}_grid.jpg` に保存
-
-#### 3-4. 本番グリッドを確認 → 最終フレームを選択
-
-`inbox/section_frames/{slug}_grid.jpg`（20フレーム）を確認し、アニメーション完成状態のフレームを選ぶ。
-
-特定したフレーム（例: フレーム番号 `15` なら `inbox/section_frames/{slug}/frame_015.jpg`）を
-`inbox/images/{product}-overview.jpg` にコピーする。このファイルは 1920x1080 の高解像度版。
+特定したフレーム（例: `frame_015.jpg`）を手動でコピーする：
+```bash
+cp inbox/section_frames/{slug}/frame_015.jpg inbox/images/{product}-overview.jpg
+```
 
 「なし」の場合はそのチャプターの画像をスキップし、記事に画像挿入しない。
 

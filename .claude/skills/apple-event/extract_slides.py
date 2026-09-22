@@ -12,6 +12,10 @@ Usage:
 
     python3 extract_slides.py finalize <URL> slug:frame_num slug:frame_num ...
         → スカウトで特定したフレームを 1080p ±10s で本番DL・グリッド作成
+
+    python3 extract_slides.py auto <URL> [slug:ts ...]
+        → 完全自動: storyboard 解析→スカウト→本番DL→フレーム選択→inbox/images/ にコピー
+        → slug:ts を省略するとストーリーボードから自動検出（要: 事前に python3 extract_slides.py <URL> 実行済み）
 """
 
 import sys
@@ -358,6 +362,81 @@ def extract_section_grids(section_paths, fps=1):
     return grids
 
 
+def score_mosaic_frame(img_path):
+    """モザイクスライドらしさ 0〜1 （PIL のみ、numpy 不要）"""
+    from PIL import Image, ImageStat, ImageFilter
+    img = Image.open(img_path).convert("RGB").resize((160, 90), Image.LANCZOS)
+    stat = ImageStat.Stat(img)
+    color_std = sum(stat.stddev) / 3.0
+    entropy = img.convert("L").entropy()
+    edges = img.convert("L").filter(ImageFilter.FIND_EDGES)
+    edge_mean = ImageStat.Stat(edges).mean[0]
+    return min(1.0, max(0.0,
+        (color_std / 80.0) * 0.4 +
+        (entropy / 7.5) * 0.3 +
+        (edge_mean / 30.0) * 0.3
+    ))
+
+
+def detect_best_mosaic_frame(frames_dir, bias_late=False):
+    """frames_dir からモザイクスライドを自動選択し 1 始まりのフレーム番号を返す"""
+    frames = sorted(Path(frames_dir).glob("frame_*.jpg"))
+    if not frames:
+        return None
+    if bias_late:
+        margin = max(1, len(frames) // 6)
+        target = frames[margin:-margin] if len(frames) > margin * 2 + 2 else frames
+    else:
+        target = frames
+    best_score, best_num = -1.0, 1
+    for f in target:
+        s = score_mosaic_frame(f)
+        n = int(f.stem.split("_")[1])
+        if s > best_score:
+            best_score, best_num = s, n
+    print(f"[auto] {Path(frames_dir).name}: frame_{best_num:03d} score={best_score:.3f}", file=sys.stderr)
+    return best_num
+
+
+def detect_mosaic_timestamps_from_storyboard(info):
+    """ストーリーボードフレームを解析し {slug: best_ts} を返す（スコア 0.45 以上のみ）"""
+    THRESHOLD = 0.45
+    duration = info.get("duration", 0)
+    chapters = info.get("chapters", [])
+    if not chapters:
+        chapters = [{"title": "Full Event", "start_time": 0, "end_time": duration}]
+    else:
+        for i, ch in enumerate(chapters):
+            if "end_time" not in ch:
+                ch["end_time"] = chapters[i + 1]["start_time"] if i + 1 < len(chapters) else duration
+
+    frames = sorted((INBOX / "storyboard_frames").glob("frame_*.jpg"))
+    result = {}
+    for ch in chapters:
+        slug = ch["title"].lower().replace(" ", "_").replace("/", "_")
+        start, end = ch["start_time"], ch["end_time"]
+        ch_frames = [
+            f for f in frames
+            if start <= int(f.stem.split("_t")[1].replace("s", "")) <= end
+        ]
+        if not ch_frames:
+            continue
+        n = len(ch_frames)
+        candidates = ch_frames[max(0, int(n * 0.7)):]
+        best_score, best_ts = 0.0, max(int(start), int(end) - 90)
+        for fpath in candidates:
+            sc = score_mosaic_frame(fpath)
+            ts = int(fpath.stem.split("_t")[1].replace("s", ""))
+            if sc > best_score:
+                best_score, best_ts = sc, ts
+        if best_score >= THRESHOLD:
+            result[slug] = best_ts
+            print(f"[auto] {slug}: ts={best_ts} score={best_score:.3f}", file=sys.stderr)
+        else:
+            print(f"[skip] {slug}: score={best_score:.3f} < {THRESHOLD} → スキップ", file=sys.stderr)
+    return result
+
+
 def _parse_slug_int_args(args):
     result = {}
     for arg in args:
@@ -404,6 +483,60 @@ if __name__ == "__main__":
         section_paths = finalize_sections(url, slug_frame_nums)
         section_grids = extract_section_grids(section_paths)
         print(json.dumps(section_grids, ensure_ascii=False, indent=2))
+
+    elif sys.argv[1] == "auto":
+        if len(sys.argv) < 3:
+            print("[error] auto モードには URL が必要です", file=sys.stderr)
+            sys.exit(1)
+        url = sys.argv[2]
+        if len(sys.argv) > 3:
+            chapter_timestamps = _parse_slug_int_args(sys.argv[3:])
+        else:
+            info_files = list(INBOX.glob("*.info.json"))
+            if not info_files:
+                print("[error] inbox/*.info.json がありません。先に python3 extract_slides.py <URL> を実行してください", file=sys.stderr)
+                sys.exit(1)
+            sb_dir = INBOX / "storyboard_frames"
+            if not sb_dir.exists() or not list(sb_dir.glob("frame_*.jpg")):
+                print("[error] storyboard_frames がありません。先に python3 extract_slides.py <URL> を実行してください", file=sys.stderr)
+                sys.exit(1)
+            with open(info_files[0]) as f:
+                info_data = json.load(f)
+            chapter_timestamps = detect_mosaic_timestamps_from_storyboard(info_data)
+            if not chapter_timestamps:
+                print("[error] ストーリーボードからモザイクスライドを検出できませんでした", file=sys.stderr)
+                sys.exit(1)
+
+        # スカウト DL → 自動フレーム検出
+        scout_paths = download_sections_scout(url, chapter_timestamps)
+        scout_grids = extract_section_grids(scout_paths, fps=0.5)
+        frame_nums = {}
+        for scout_slug, grid_info in scout_grids.items():
+            actual = scout_slug[:-len("_scout")] if scout_slug.endswith("_scout") else scout_slug
+            fn = detect_best_mosaic_frame(grid_info["frames_dir"])
+            if fn is not None:
+                frame_nums[actual] = fn
+
+        if not frame_nums:
+            print("[error] スカウトフレームからの自動検出に失敗しました", file=sys.stderr)
+            sys.exit(1)
+
+        # 本番 DL → 自動フレーム選択 → コピー
+        final_paths = finalize_sections(url, frame_nums)
+        final_grids = extract_section_grids(final_paths, fps=1)
+        out_images = INBOX / "images"
+        out_images.mkdir(parents=True, exist_ok=True)
+        results = {}
+        for slug, grid_info in final_grids.items():
+            fn = detect_best_mosaic_frame(grid_info["frames_dir"], bias_late=True)
+            if fn is None:
+                continue
+            src = Path(grid_info["frames_dir"]) / f"frame_{fn:03d}.jpg"
+            dest = out_images / f"{slug.replace('_', '-')}-overview.jpg"
+            shutil.copy(str(src), str(dest))
+            results[slug] = {"image": str(dest), "final_frame": fn, "grid_path": grid_info["grid_path"]}
+            print(f"[auto] {slug} → {dest.name}", file=sys.stderr)
+        print(json.dumps(results, ensure_ascii=False, indent=2))
 
     else:
         url = sys.argv[1]
