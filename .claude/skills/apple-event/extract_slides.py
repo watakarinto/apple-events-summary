@@ -191,7 +191,7 @@ def download_sections_parallel(url, chapter_timestamps):
             [
                 "yt-dlp",
                 "--download-sections", f"*{ts_start}-{ts_end}",
-                "-f", "bestvideo[ext=mp4][height<=1080]",
+                "-f", "bestvideo[ext=mp4][height<=1440]",
                 "--force-overwrite",
                 "-o", out,
                 url,
@@ -244,6 +244,7 @@ def extract_section_grids(section_paths):
             [
                 "ffmpeg", "-i", mp4_path,
                 "-vf", "fps=1",
+                "-q:v", "1",
                 str(frames_dir / "frame_%03d.jpg"),
                 "-y",
             ],
@@ -280,7 +281,9 @@ def extract_section_grids(section_paths):
             "frames_dir": str(frames_dir),
             "frame_files": [str(f) for f in frame_files],
         }
-        print(f"[ok] {slug}: {len(frame_files)}フレーム (1920x1080) → グリッド作成", file=sys.stderr)
+        from PIL import Image as _PIL
+        _sz = _PIL.open(frame_files[0]).size if frame_files else (0, 0)
+        print(f"[ok] {slug}: {len(frame_files)}フレーム ({_sz[0]}x{_sz[1]}) → グリッド作成", file=sys.stderr)
 
     return grids
 
