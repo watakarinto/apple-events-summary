@@ -84,7 +84,7 @@ python3 .claude/skills/apple-event/extract_slides.py download <URL> \
 
 スクリプトが以下を行う：
 - 各チャプターの指定タイムスタンプ ±120秒を**360p以下で並列DL**（スカウト）
-- 1fps でフレーム抽出（240フレーム）
+- 0.5fps でフレーム抽出（120フレーム）
 - スカウトグリッド画像を `inbox/section_frames/{slug}_scout_grid.jpg` に保存
 - タイムスタンプメタデータを `inbox/section_frames/{slug}_scout.json` に保存
 

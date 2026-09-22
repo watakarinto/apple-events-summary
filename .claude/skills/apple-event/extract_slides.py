@@ -211,7 +211,7 @@ def download_sections_scout(url, chapter_timestamps):
         if result.returncode != 0:
             print(f"[error] {slug}: スカウトDL失敗 (code={result.returncode})\n{result.stderr}", file=sys.stderr)
             raise subprocess.CalledProcessError(result.returncode, "yt-dlp")
-        meta = {"slug": slug, "ts_center": ts, "ts_start": ts_start}
+        meta = {"slug": slug, "ts_center": ts, "ts_start": ts_start, "fps": 0.5}
         (meta_dir / f"{slug}_scout.json").write_text(json.dumps(meta, ensure_ascii=False))
         print(f"[ok] {slug}: スカウトDL完了 ({ts_start}s-{ts_end}s, 360p以下)", file=sys.stderr)
         return f"{slug}_scout", out
@@ -245,7 +245,8 @@ def finalize_sections(url, slug_frame_nums):
                 f"スカウトメタデータが見つかりません: {meta_path}\n先に download を実行してください"
             )
         meta = json.loads(meta_path.read_text())
-        exact_ts = meta["ts_start"] + frame_num - 1
+        scout_fps = meta.get("fps", 1)
+        exact_ts = int(meta["ts_start"] + (frame_num - 1) / scout_fps)
         ts_start = max(0, exact_ts - 10)
         ts_end = exact_ts + 10
         out = str(out_dir / f"{slug}.mp4")
@@ -282,8 +283,8 @@ def finalize_sections(url, slug_frame_nums):
     return results
 
 
-def extract_section_grids(section_paths):
-    """各セクション動画からフレームを抽出してグリッド画像を作る"""
+def extract_section_grids(section_paths, fps=1):
+    """各セクション動画からフレームを抽出してグリッド画像を作る（並列ffmpeg）"""
     try:
         from PIL import Image, ImageDraw
     except ImportError:
@@ -291,17 +292,15 @@ def extract_section_grids(section_paths):
 
     out_dir = INBOX / "section_frames"
     out_dir.mkdir(parents=True, exist_ok=True)
-    grids = {}
 
-    for slug, mp4_path in section_paths.items():
+    def extract_frames(slug, mp4_path):
         frames_dir = out_dir / slug
         shutil.rmtree(frames_dir, ignore_errors=True)
         frames_dir.mkdir()
-
         result = subprocess.run(
             [
                 "ffmpeg", "-i", mp4_path,
-                "-vf", "fps=1",
+                "-vf", f"fps={fps}",
                 "-q:v", "1",
                 str(frames_dir / "frame_%03d.jpg"),
                 "-y",
@@ -310,20 +309,35 @@ def extract_section_grids(section_paths):
             capture_output=True,
             text=True,
         )
-        if result.returncode != 0:
-            print(f"[error] {slug}: ffmpeg 失敗 (code={result.returncode})\n{result.stderr}", file=sys.stderr)
-            continue
+        return slug, result, frames_dir
 
+    # ffmpeg を並列実行
+    extracted = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
+        futures = {ex.submit(extract_frames, slug, path): slug for slug, path in section_paths.items()}
+        for future in concurrent.futures.as_completed(futures):
+            slug_key = futures[future]
+            try:
+                slug, result, frames_dir = future.result()
+                if result.returncode != 0:
+                    print(f"[error] {slug}: ffmpeg 失敗 (code={result.returncode})\n{result.stderr}", file=sys.stderr)
+                else:
+                    extracted[slug] = frames_dir
+            except Exception as e:
+                print(f"[error] {slug_key}: {e}", file=sys.stderr)
+
+    # グリッド作成
+    cols = 10
+    tw, th, lh = 64, 36, 10
+    grids = {}
+    for slug, frames_dir in extracted.items():
         frame_files = sorted(frames_dir.glob("frame_*.jpg"))
         if not frame_files:
             print(f"[warn] {slug}: フレーム抽出結果なし", file=sys.stderr)
             continue
 
-        cols = 10
-        tw, th, lh = 64, 36, 10
         rows_count = (len(frame_files) + cols - 1) // cols
         grid = Image.new("RGB", (cols * tw, rows_count * (th + lh)), (20, 20, 20))
-
         for i, fpath in enumerate(frame_files):
             col, row = i % cols, i // cols
             img = Image.open(fpath).resize((tw, th), Image.LANCZOS)
@@ -338,8 +352,7 @@ def extract_section_grids(section_paths):
             "frames_dir": str(frames_dir),
             "frame_files": [str(f) for f in frame_files],
         }
-        from PIL import Image as _PIL
-        _sz = _PIL.open(frame_files[0]).size if frame_files else (0, 0)
+        _sz = Image.open(frame_files[0]).size
         print(f"[ok] {slug}: {len(frame_files)}フレーム ({_sz[0]}x{_sz[1]}) → グリッド作成", file=sys.stderr)
 
     return grids
@@ -379,7 +392,7 @@ if __name__ == "__main__":
         url = sys.argv[2]
         chapter_timestamps = _parse_slug_int_args(sys.argv[3:])
         section_paths = download_sections_scout(url, chapter_timestamps)
-        section_grids = extract_section_grids(section_paths)
+        section_grids = extract_section_grids(section_paths, fps=0.5)
         print(json.dumps(section_grids, ensure_ascii=False, indent=2))
 
     elif sys.argv[1] == "finalize":
