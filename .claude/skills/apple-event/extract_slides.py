@@ -184,8 +184,8 @@ def download_sections_parallel(url, chapter_timestamps):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     def download(slug, ts):
-        ts_start = max(0, ts - 30)
-        ts_end = ts + 30
+        ts_start = max(0, ts - 60)
+        ts_end = ts + 60
         out = str(out_dir / f"{slug}.mp4")
         result = subprocess.run(
             [
