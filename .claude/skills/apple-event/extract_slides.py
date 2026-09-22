@@ -143,10 +143,12 @@ def make_chapter_grids(info, interval):
             print(f"[warn] {ch['title']}: フレームなし", file=sys.stderr)
             continue
 
-        target = ch_frames[int(len(ch_frames) * 0.7):]
+        n = len(ch_frames)
+        start_idx = max(0, min(int(n * 0.7), n - 15))
+        target = ch_frames[start_idx:]
 
-        cols = 10
-        tw, th, lh = 80, 45, 12
+        cols = 5
+        tw, th, lh = 160, 90, 14
         rows_count = (len(target) + cols - 1) // cols
         grid = Image.new("RGB", (cols * tw, rows_count * (th + lh)), (20, 20, 20))
 
@@ -161,10 +163,13 @@ def make_chapter_grids(info, interval):
 
         grid_path = str(out_dir / f"{slug}.jpg")
         grid.save(grid_path, quality=85)
+        # モザイクスライドはチャプター終端の約90秒前に現れる経験則
+        recommended_ts = max(int(start), int(end) - 90)
         result[slug] = {
             "title": ch["title"],
             "start_time": start,
             "end_time": end,
+            "recommended_ts": recommended_ts,
             "grid_path": grid_path,
             "frame_interval": interval,
         }
@@ -187,6 +192,7 @@ def download_sections_parallel(url, chapter_timestamps):
                 "yt-dlp",
                 "--download-sections", f"*{ts_start}-{ts_end}",
                 "-f", "bestvideo[ext=mp4][height<=1080]",
+                "--force-overwrite",
                 "-o", out,
                 url,
             ],
