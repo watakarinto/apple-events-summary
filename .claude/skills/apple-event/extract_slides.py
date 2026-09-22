@@ -199,6 +199,7 @@ def download_sections_scout(url, chapter_timestamps):
                 "yt-dlp",
                 "--download-sections", f"*{ts_start}-{ts_end}",
                 "-f", "bestvideo[height<=360]",
+                "--concurrent-fragments", "4",
                 "--force-overwrite",
                 "-o", out,
                 url,
@@ -252,7 +253,8 @@ def finalize_sections(url, slug_frame_nums):
             [
                 "yt-dlp",
                 "--download-sections", f"*{ts_start}-{ts_end}",
-                "-f", "bestvideo[ext=mp4][height<=1080]",
+                "-f", "bestvideo[ext=mp4][height<=1080]/bestvideo[height<=1080]",
+                "--concurrent-fragments", "4",
                 "--force-overwrite",
                 "-o", out,
                 url,
@@ -346,7 +348,7 @@ def extract_section_grids(section_paths):
 def _parse_slug_int_args(args):
     result = {}
     for arg in args:
-        parts = arg.split(":")
+        parts = arg.split(":", 1)
         if len(parts) != 2:
             print(f"[error] 引数の形式が不正です: {arg!r}  (期待形式: slug:数値)", file=sys.stderr)
             sys.exit(1)
