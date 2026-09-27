@@ -183,9 +183,11 @@ def make_chapter_grids(info, interval):
 
 
 def download_sections_scout(url, chapter_timestamps):
-    """スカウトフェーズ：360p以下・±120s で並列DL
+    """スカウトフェーズ：360p以下・±60s で並列DL
 
-    モザイクスライドのフレーム番号特定用。低解像度で広いウィンドウを取得する。
+    chapter_timestamps の値は int（タイムスタンプ秒）か
+    {"ts": int, "start": int, "end": int}（チャプター境界付き）のどちらでも可。
+    境界付きの場合はその範囲内に DL 範囲をクランプする。
     メタデータ（ts_start）を section_frames/{slug}_scout.json に保存する。
     戻り値のキーは "{slug}_scout" 形式で、extract_section_grids がそのまま使える。
     """
@@ -194,9 +196,16 @@ def download_sections_scout(url, chapter_timestamps):
     out_dir.mkdir(parents=True, exist_ok=True)
     meta_dir.mkdir(parents=True, exist_ok=True)
 
-    def download(slug, ts):
-        ts_start = max(0, ts - 120)
-        ts_end = ts + 120
+    def download(slug, ts_info):
+        if isinstance(ts_info, dict):
+            ts = ts_info["ts"]
+            ch_start = ts_info.get("start", 0)
+            ch_end = ts_info.get("end", 9999999)
+        else:
+            ts = ts_info
+            ch_start, ch_end = 0, 9999999
+        ts_start = max(ch_start, ts - 60)
+        ts_end = min(ch_end, ts + 60)
         out = str(out_dir / f"{slug}_scout.mp4")
         result = subprocess.run(
             [
@@ -221,7 +230,7 @@ def download_sections_scout(url, chapter_timestamps):
         return f"{slug}_scout", out
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
-        futures = {ex.submit(download, slug, ts): slug for slug, ts in chapter_timestamps.items()}
+        futures = {ex.submit(download, slug, ts_info): slug for slug, ts_info in chapter_timestamps.items()}
         results = {}
         for future in concurrent.futures.as_completed(futures):
             try:
@@ -398,8 +407,12 @@ def detect_best_mosaic_frame(frames_dir, bias_late=False):
     return best_num
 
 
-def detect_mosaic_timestamps_from_storyboard(info):
-    """ストーリーボードフレームを解析し {slug: best_ts} を返す（スコア 0.45 以上のみ）"""
+def detect_mosaic_timestamps_from_storyboard(info, with_bounds=False):
+    """ストーリーボードフレームを解析し {slug: best_ts} を返す（スコア 0.45 以上のみ）
+
+    with_bounds=True の場合、値は {"ts": int, "start": int, "end": int} になる。
+    download_sections_scout に渡すとチャプター境界内にスカウト範囲をクランプできる。
+    """
     THRESHOLD = 0.45
     duration = info.get("duration", 0)
     chapters = info.get("chapters", [])
@@ -430,7 +443,10 @@ def detect_mosaic_timestamps_from_storyboard(info):
             if sc > best_score:
                 best_score, best_ts = sc, ts
         if best_score >= THRESHOLD:
-            result[slug] = best_ts
+            if with_bounds:
+                result[slug] = {"ts": best_ts, "start": int(start), "end": int(end)}
+            else:
+                result[slug] = best_ts
             print(f"[auto] {slug}: ts={best_ts} score={best_score:.3f}", file=sys.stderr)
         else:
             print(f"[skip] {slug}: score={best_score:.3f} < {THRESHOLD} → スキップ", file=sys.stderr)
@@ -494,15 +510,18 @@ if __name__ == "__main__":
         else:
             info_files = list(INBOX.glob("*.info.json"))
             if not info_files:
-                print("[error] inbox/*.info.json がありません。先に python3 extract_slides.py <URL> を実行してください", file=sys.stderr)
+                print("[error] inbox/*.info.json がありません。先に yt-dlp --write-info-json を実行してください", file=sys.stderr)
                 sys.exit(1)
             sb_dir = INBOX / "storyboard_frames"
             if not sb_dir.exists() or not list(sb_dir.glob("frame_*.jpg")):
-                print("[error] storyboard_frames がありません。先に python3 extract_slides.py <URL> を実行してください", file=sys.stderr)
-                sys.exit(1)
+                print("[auto] storyboard_frames が見つかりません。自動取得します...", file=sys.stderr)
+                info_data, sb_path = download_storyboard(url)
+                extract_frames(sb_path, info_data)
+            else:
+                print("[skip] storyboard_frames は既に存在します", file=sys.stderr)
             with open(info_files[0]) as f:
                 info_data = json.load(f)
-            chapter_timestamps = detect_mosaic_timestamps_from_storyboard(info_data)
+            chapter_timestamps = detect_mosaic_timestamps_from_storyboard(info_data, with_bounds=True)
             if not chapter_timestamps:
                 print("[error] ストーリーボードからモザイクスライドを検出できませんでした", file=sys.stderr)
                 sys.exit(1)
