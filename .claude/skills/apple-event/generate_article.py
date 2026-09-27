@@ -54,7 +54,9 @@ def parse_vtt(vtt_path):
             l for l in lines
             if l and "-->" not in l and not l.isdigit() and not l.startswith("WEBVTT")
         ]
-        text = " ".join(text_lines).strip()
+        raw = " ".join(text_lines).strip()
+        # YouTube VTT の HTMLタグ（<c.color...>, <00:00:01.000>, <i> 等）を除去
+        text = re.sub(r"<[^>]+>", "", raw).strip()
         if text and text not in seen_texts:
             entries.append((int(seconds), text))
             seen_texts.add(text)

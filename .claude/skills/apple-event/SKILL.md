@@ -110,16 +110,16 @@ python3 .claude/skills/apple-event/generate_article.py
 
 stdout の `chapters` リストを確認し、製品チャプター数分の **fork エージェントを1つのメッセージで同時に起動する**。
 
-各フォークへの指示テンプレート：
+各フォークへの指示テンプレート（`{...}` はメイン側で実際の値に置き換えてからフォークに渡す）：
 
 ```
 Apple Event まとめ記事の以下の製品セクションを日本語で生成してください。
 
 製品名：{title}
 字幕（チャプター抜粋）：
-{Read ツールで inbox/chapter_transcripts/{slug}.txt を読んだ内容}
+{inbox/chapter_transcripts/{slug}.txt の全文をここに貼り付ける}
 
-画像：{image_slug}-overview.jpg（あれば本文先頭に挿入）
+画像：{image_slug}-overview.jpg（あれば本文先頭に挿入、image_slugがnullなら画像行不要）
 
 **出力ルール（厳守）：**
 - `## {title}` セクションのみ出力する（frontmatter・他製品・まとめは書かない）
@@ -138,7 +138,7 @@ Apple Event まとめ記事の以下の製品セクションを日本語で生�
 - 数値比較は字幕に根拠がある場合のみ書く
 ```
 
-**重要：** 各フォークは自分の `{slug}.txt` ファイルだけを Read すれば良い。2時間の全字幕は不要。
+**重要：** 各フォークに渡す字幕はメイン側で `Read inbox/chapter_transcripts/{slug}.txt` して内容をプロンプトに直接貼り付ける。フォーク自身にファイルを読ませない（並列起動のタイミングで競合するため）。
 
 #### 4-3. 記事を組み立てる
 
@@ -236,7 +236,7 @@ git commit -m "{イベント名} まとめ記事を追加"
 ```bash
 # 字幕・storyboard・中間ファイルを削除
 rm -f inbox/*.vtt inbox/*.json inbox/*.mhtml
-rm -rf inbox/storyboard_frames/ inbox/chapter_grids/ inbox/sections/ inbox/section_frames/
+rm -rf inbox/storyboard_frames/ inbox/chapter_grids/ inbox/sections/ inbox/section_frames/ inbox/chapter_transcripts/
 
 # transcript.txt の中身をクリア（ファイル自体は残す）
 > inbox/transcript.txt
