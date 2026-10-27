@@ -228,10 +228,11 @@ def jp_date(date):
 
 
 CONSUMPTION_TAX = 0.10  # 米国の価格は税抜きなので、日本円の参考値には消費税を足す
+YEN_HEADER = "税込換算"  # 表の中で改行されにくい短い見出し（参考値・税込みであることは注記で説明する）
 
 
 def add_yen_column(md, fx):
-    """「価格」列を持つ最初の表に「日本円（参考・税込）」列と注記を足す（ドル表記の価格だけを換算する）。
+    """「価格」列を持つ最初の表に日本円（参考・税込）の列と注記を足す（ドル表記の価格だけを換算する）。
 
     すでに日本円の列と注記があれば置き換える。
     """
@@ -261,10 +262,10 @@ def add_yen_column(md, fx):
         header = cells(line)
         if not any("価格" in c for c in header):
             continue
-        old = next((k for k, c in enumerate(header) if "日本円" in c), None)
+        old = next((k for k, c in enumerate(header) if "日本円" in c or c == YEN_HEADER), None)
         header, sep = drop(header, old), drop(cells(lines[i + 1]), old)
         col = next(k for k, c in enumerate(header) if "価格" in c)
-        out = [row(header[:col + 1] + ["日本円（参考・税込）"] + header[col + 1:]),
+        out = [row(header[:col + 1] + [YEN_HEADER] + header[col + 1:]),
                row(sep[:col + 1] + ["------"] + sep[col + 1:])]
         j = i + 2
         while j < len(lines) and lines[j].startswith("|"):
