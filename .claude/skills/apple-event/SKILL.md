@@ -50,7 +50,7 @@ Introduction などの製品以外のチャプターは除外済み。手動字�
 起動したら待たずに 3 へ進む。
 
 - 執筆ルール（構成・書かないもの）は `.claude/skills/apple-event/writer_rules.md` にあり、ライターが毎回最初に読む。記事の書き方を変えるときはこのファイルを直す
-- `apple-event-writer` が使えない場合は、`subagent_type: general-purpose`・`model: sonnet` で起動する。prompt の先頭に「最初に .claude/skills/apple-event/writer_rules.md を Read し、そのルールに厳密に従う」と書く
+- `apple-event-writer` が使えない場合（セッション途中でエージェント定義を作成・変更した場合など）は、`subagent_type: general-purpose`・`model: sonnet`・`effort: medium` で起動する。prompt の先頭に「最初に .claude/skills/apple-event/writer_rules.md を Read し、そのルールに厳密に従う」と書く
 
 ### 3. まとめスライドを抽出（20〜30秒）
 
