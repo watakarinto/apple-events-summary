@@ -5,275 +5,173 @@ description: Apple Event の字幕から製品ごとの日本語まとめ記事�
 
 # /apple-event
 
-Apple Event の字幕から製品ごとの日本語まとめ記事を生成してローカルコミットする。
+Apple Event の YouTube 動画から、製品ごとの日本語まとめ記事（カード状まとめスライドの画像付き）を生成し、ローカルコミットする。
 
 ## 使い方
 
 ```
-/apple-event <YouTube URL>   # URLから字幕・画像を自動取得
+/apple-event <YouTube URL>   # 通常（目安 3〜5分）
 /apple-event                 # inbox/transcript.txt を使う
 ```
 
-## 手順
+## 速度のための原則（厳守）
 
-### 1. 入力の判定
+- 重い処理は `pipeline.py` に任せる。メインは**字幕を Read しない**。**記事本文を打ち直さない**（組み立ては `assemble`）
+- ライターは **1つのメッセージで全員同時に起動**し、完了を待たずに `slides` へ進む
+- 確認シートの Read は1回だけ。差し替えのコマンドは1回の Bash にまとめる
 
-**URLが引数にある場合：**
-```bash
-yt-dlp --write-auto-sub --sub-lang en --skip-download \
-  --write-info-json -o "inbox/%(title)s" <URL>
-```
-- `inbox/*.vtt` が字幕ファイル
-- `inbox/*.info.json` の `chapters` フィールドをチャプター情報として使う（あれば）
-- 日付は **JST（日本時間）** でタイムスタンプから取得する
-  ```bash
-  yt-dlp --skip-download --print "%(timestamp)s" <URL> \
-    | xargs -I{} sh -c 'TZ=Asia/Tokyo date -r {} +%Y-%m-%d'
-  ```
+以下、`P <cmd>` は `uv run .claude/skills/apple-event/pipeline.py <cmd>` の略。プロジェクトルートで実行する。
 
-**URLがない場合：**
-- `inbox/transcript.txt` を字幕として使う
-- チャプター情報はなしとして扱う
-- **日付の取得**：transcript.txt の1行目がYouTube URLの場合、yt-dlpでJSTで取得する
-  ```bash
-  URL=$(head -1 inbox/transcript.txt)
-  yt-dlp --skip-download --print "%(timestamp)s" "$URL" \
-    | xargs -I{} sh -c 'TZ=Asia/Tokyo date -r {} +%Y-%m-%d'
-  ```
-  URLがない、または取得できない場合は `1970-01-01` を仮置きしてユーザーに確認する
-- transcript.txt の日本語タイムスタンプ形式（`0:2727 秒text`）はVTTではないので、行頭の `^\d+:\d+(?:\d+\s*分\s*\d+\s*秒|\d+\s*秒)` パターンを除去してテキストを抽出する
+## 手順（URL あり）
 
-### 2. 字幕の読み込み
-
-- VTT形式の場合はタイムスタンプ行を除去してテキストのみ抽出
-- 重複行（VTTの仕様で同じ行が続く）を除去して読みやすくする
-
-### 3. ストーリーボード取得とモザイクスライド特定（URLがある場合）
-
-**URLがない場合はこのステップをスキップする。**
-
-#### 3-1. スクリプトでストーリーボード取得・フレーム抽出・グリッド作成を一括実行
+### 1. 字幕と info を取得（10秒前後）
 
 ```bash
-python3 .claude/skills/apple-event/extract_slides.py <URL>
+P fetch <URL>
 ```
 
-このスクリプトが以下をすべて行う：
-- ストーリーボード（sb0）を取得
-- フレームを `inbox/storyboard_frames/` に抽出
-- 各チャプターの末尾30%フレームをグリッド画像化 → `inbox/chapter_grids/{slug}.jpg`
-- チャプター情報をJSON形式でstdoutに出力（タイムスタンプ・グリッドパス）
+stdout の JSON に以下が入っている。
+- `title`、`date`（JST の開催日）、`post_dir`（記事ディレクトリ名の候補）
+- `chapters[]`：製品チャプターごとの `title` / `slug` / `transcript` / `part`
+- `intro_transcript`
 
-スクリプトがエラーを出した場合は内容を確認して対処し、このステップをスキップして画像なしで記事生成に進む。
+Introduction などの製品以外のチャプターは除外済み。手動字幕があればそれを使い、無ければ自動字幕を使う。
 
-#### 3-2. モザイクスライドを自動抽出（推奨）
+### 2. ライターを全員同時に起動（1メッセージ）
+
+`chapters` の数だけ Agent を **1つのメッセージで** 起動する。`subagent_type: apple-event-writer` を指定し、prompt は次の3行だけにする（字幕の中身は貼らない。ライターが自分で読み、`part` に書き出す）。
+
+```
+チャプター: {title}
+字幕: {transcript}
+出力: {part}
+```
+
+起動したら待たずに 3 へ進む。
+
+- ライターはチャプター内の**製品ごとに** `## {製品名}` セクションを書く（例：チャプター「AirPods」→ AirPods 4／AirPods Max／AirPods Pro 2）
+- 執筆ルール（構成・セクションの分け方・書かないもの）は `.claude/skills/apple-event/writer_rules.md` にあり、ライターが毎回最初に読む。記事の書き方を変えるときはこのファイルを直す
+- `apple-event-writer` が使えない場合（セッション途中でエージェント定義を作成・変更した場合など）は、`subagent_type: general-purpose`・`model: sonnet`・`effort: medium` で起動する。prompt の先頭に「最初に .claude/skills/apple-event/writer_rules.md を Read し、そのルールに厳密に従う」と書く
+
+### 3. まとめスライドを抽出（20〜30秒）
 
 ```bash
-python3 .claude/skills/apple-event/extract_slides.py auto <URL>
+P slides
 ```
 
-以下をすべて自動実行する：
-- ストーリーボードから各チャプターのモザイク候補タイムスタンプを自動検出（色多様性・エッジ密度スコアリング）
-- スカウト DL（360p ±120s、0.5fps = 120フレーム）→ 自動フレーム選択
-- 本番 DL（1080p ±10s）→ 自動フレーム選択
-- `inbox/images/{slug}-overview.jpg` に自動コピー
-- stdout に結果 JSON を出力（`image` パス・`final_frame` 番号・`grid_path`）
+- 240p SDR の映像全体を解析し、製品チャプターごとにカード状まとめスライドの候補を最大3つ（c1〜c3）出す
+- c1 の 1080p SDR 静止画を `inbox/images/{image_slug}-overview.jpg` に保存する
+- 確認シートを `inbox/review_sheet.jpg` に出力する
 
-完了後、stdout JSON の `grid_path` の画像を Read ツールで確認し、意図通りのモザイクスライドが取れているか検証する。問題があれば 3-3 で手動補正する。
+失敗した場合は画像なしで続行する（`assemble` は画像が無い製品には挿入しない）。
 
-特定チャプターのタイムスタンプを手動指定したい場合（storyboard 検出より精度が高い場合など）：
-```bash
-python3 .claude/skills/apple-event/extract_slides.py auto <URL> \
-  '<chapter_slug>:<ts>' ...
-```
+### 4. 確認シートを1回だけ Read する
 
-#### 3-3. 手動補正（自動検出が失敗した製品のみ）
+`inbox/review_sheet.jpg` を Read し、製品ごとに左の大きい画像（c1、緑枠）が**その製品のカード状まとめスライド**かを判定する。
 
-自動検出結果を確認後、問題のある製品だけ手動で再実行する。
+- ○：角丸のカードが格子状に並び、全カードが揃っていて四辺に余白がある
+- ×：製品単体の写真、合成カット、UI 画面、写真ギャラリー、タイトルスライド、組み上がり途中やズーム途中のもの
+
+直す必要がある製品だけ、1回の Bash でまとめて実行する。
 
 ```bash
-# スカウトからやり直す場合
-python3 .claude/skills/apple-event/extract_slides.py download <URL> '<slug>:<ts>'
-# → inbox/section_frames/{slug}_scout_grid.jpg を確認し frame_num を特定
-python3 .claude/skills/apple-event/extract_slides.py finalize <URL> '<slug>:<frame_num>'
-# → inbox/section_frames/{slug}_grid.jpg を確認し最良フレームを特定
+P pick <slug> c2            # c2 に差し替え
+P pick <slug> none          # 画像なし
+P pick <slug> c2 --extra    # 追加画像として {image_slug}-overview-2.jpg に保存（c1 はそのまま）
 ```
 
-特定したフレーム（例: `frame_015.jpg`）を手動でコピーする：
+- `--extra` は、1チャプターに複数製品があり（例：AirPods 4 と AirPods Pro、Series と Ultra）、c2 以降が別製品のまとめスライドである場合に使う。どの画像がどの製品のものかを覚えておき、手順6で `place` する
+- c1〜c3 のどれも違う場合は `P sheet <slug> [開始秒 終了秒]` で一覧シートを作り、Read して秒数を決め、`P pick <slug> <秒>` を実行する
+- `[LOW CONFIDENCE]` が付いた製品は特に注意して見る
+- `pick` の出力の `match` が 0.9 未満なら、その画像を Read して確認する
+
+### 5. ライターの完了を待つ
+
+各ライターの完了通知（製品ごとに `- {製品名}｜価格: …｜発売日: …` の1行）が全員分そろうまで待つ。ポーリングは不要。失敗したライターは同じ prompt で起動し直す。
+
+### 6. 画像の配置、ヘッダと価格表（メインが書く本文はここだけ）
+
+まず `grep "^## " inbox/article_parts/*.md` で製品セクションを確認する。
+
+**画像の配置：** 1チャプターに1製品なら何もしなくてよい（`assemble` が c1 の画像をセクションの先頭に自動で入れる）。1チャプターに複数製品がある場合は、そのチャプターの画像（c1 と `--extra` で追加したもの）を、すべて対応する製品に明示的に置く。まとめスライドが無い製品には置かない。
+
 ```bash
-cp inbox/section_frames/{slug}/frame_015.jpg inbox/images/{product}-overview.jpg
+P place airpods-overview.jpg "AirPods 4"
+P place airpods-overview-2.jpg "AirPods Pro 2"   # 見出しは前方一致。置き直すと移動する
 ```
 
-「なし」の場合はそのチャプターの画像をスキップし、記事に画像挿入しない。
+**ヘッダと価格表：**
+- `inbox/article_parts/00_header.md`：frontmatter と導入1〜2文だけを書く（製品の一覧はページの目次が兼ねるので書かない）。必要なら `intro_transcript` を Read してよい（短い）
+- `inbox/article_parts/99_summary.md`：`## 価格・発売日` の表だけを書く（ライターの返答から作る）。締めのコメントは書かない。価格はドルのまま書く。「日本円（参考）」の列と注記は、`assemble` が発表日の為替レートで自動的に足す（レートは `slides` が取得済み。自分で計算しない）
+- `---` 区切りは書かない（`assemble` が入れる）
+- 登壇者の名前や誰が話したか、宣伝文句は書かない。事実だけを書く
+- ライターの返答で価格・発売日が「言及なし」の製品は、発売情報が別チャプター（最後の製品など）でまとめて告知されていることが多い。`grep -n -i "pre-order\|available" inbox/chapter_transcripts/*.txt` で確認し、見つかれば価格表に反映する
 
-### 4. 製品ごとに日本語まとめを生成
+**手動画像（後述）** は、該当パートの文脈に合う位置に Edit で挿入する。
 
-以下のプロンプトでClaudeが処理する：
-
+```markdown
+![{日本語キャプション}]({ファイル名})
+*出典：Apple*
 ```
-以下はApple Eventの英語字幕です。
 
-[チャプター情報がある場合]
-チャプター：
-{chapters}
+`00_header.md` のテンプレート：
 
-字幕：
-{transcript}
-
-[取得した画像がある場合]
-各製品のまとめスライド画像：
-{product}: {image_path}
-...
-
-指示：
-1. 字幕を読み、製品・トピックごとにセクションを分割する
-   - チャプターがあればそれを優先ヒントにする
-   - なければ "Now, let's talk about..." などの切り替え発話を手がかりにする
-2. 各セクションを英語で要点をまとめる（数値・チップ名・価格は字幕の該当箇所を根拠に正確に書く）
-3. その要点をもとに、以下のテンプレートに沿って日本語記事を書く
-
-**粒度の方針（最重要）：**
-- 読者は **Apple信者・デベロッパ**。ハイレベルなサマリではなく、字幕で言及された機能・数値・デモ・API名を**すべて拾って詳報として書く**
-- 「〇〇が改善された」で終わらせず、「何がどう変わったか・具体的な数値・仕組み」まで書く
-  - 例：「アプリ起動が速くなった」→「iPhoneとiPadのアプリ起動が最大30%速くなった。使いそうなデータをあらかじめ読み込ませることで瞬時に使えるようにした」
-- WWDCなど開発者向けイベントでは、API名・フレームワーク名・アーキテクチャの説明も省略しない
-- プラットフォームごとに挙動が異なる場合は表にまとめて全プラットフォームを列挙する
-- 一つのセクションに複数のサブ機能があれば、`###` 見出しで分けて各サブ機能を段落で説明する
-
-**表現の方針：**
-- 原文（字幕）の言い回しや主張を忠実に再現する。誇張・評価の上乗せはしない
-- Appleが「最高」「革新的」と言っていれば書いてよいが、自分で「驚異的」「圧倒的」などと加えない
-- 数値の比較（〇〇比△△%向上など）は字幕に根拠がある場合のみ書く
-- 編集コメント（「〇〇が気になる」など）は最小限にとどめる
-
-## 記事テンプレート
-
+```markdown
 ---
 title: "{イベント名} まとめ"
-date: {JST（日本時間）での開催日 YYYY-MM-DD}
+date: {date}
 draft: false
 tags: [{製品カテゴリ}, ...]
-# タグの方針：
-# - 製品カテゴリのみ（iPhone / Mac / iPad / Apple Watch / AirPods / Vision Pro など）
-# - 具体的なモデル名・イベント名・年はタグにしない
-summary: "一言でイベントの概要（読者がクリックしたくなる文章）"
+# タグは製品カテゴリのみ（iPhone / Mac / iPad / Apple Watch / AirPods / Vision Pro など）
+summary: "イベントの概要を一言で（読者がクリックしたくなる文章）"
 ---
 
-{イベント全体の冒頭まとめ。日付・場所・今年のキーワード・発表製品を2〜3文で。}
+{日付・場所・今年のテーマを1〜2文で。}
+```
 
----
+`99_summary.md` のテンプレート（製品は発表順＝記事のセクションと同じ順に並べる。モデルごとに価格が違えば行を分ける）：
 
-## {製品名1}
-
-[まとめスライド画像がある場合]
-![{製品名} 機能まとめ]({product}-overview.jpg)
-*出典：Apple*
-
-{この製品の「何がすごいか」を1〜2文で。読者が続きを読みたくなる導入。}
-
-### {主要トピック見出し}
-
-{短い段落で説明。専門用語は使ってよいがApple信者向けの温度感で書く。}
-{スペックは文中に自然に織り込む。比較数値（〇〇比△△%向上など）は積極的に入れる。}
-
-{複数の項目を並べる場合は箇条書き：}
-- **{項目名}**：{説明}
-- **{項目名}**：{説明}
-
-{スペックや価格の比較は表で：}
-| {列1} | {列2} |
-|-------|-------|
-| {値}  | {値}  |
-
-### 価格・発売日
-
-| モデル | 価格 |
-|--------|------|
-| {モデル名} | {価格} |
-
-{予約開始日}予約開始、**{発売日}発売**。
-
----
-
-{他の製品も同じ構成で繰り返す}
-
----
-
-## まとめ
-
-{全製品の価格・発売日を1つの表にまとめる}
+```markdown
+## 価格・発売日
 
 | 製品 | 価格 | 発売日 |
 |------|------|--------|
 | {製品名} | {価格} | {発売日} |
-
-{締めの一言。どの製品が特に注目か、どう選ぶかなどの軽い編集コメント。}
 ```
 
-### 5. inbox/images/ の振り分け（手動画像がある場合）
-
-ストーリーボード取得分以外に `inbox/images/` にファイルがあれば、各画像をVisionで確認して：
-- どの製品セクションの画像かを判定
-- 内容を反映した英語のケバブケース名にリネームして Page Bundle ディレクトリにコピー
-  - ルール：`{カテゴリ}-{トピック}.{拡張子}`（小文字・ハイフン区切り・英語）
-  - 例：`IMG_0012.png` → `iphone-variable-aperture.png`
-  - 同じカテゴリ・トピックの画像が複数ある場合のみ末尾に `-02`、`-03` を付ける
-  - カテゴリ例：`iphone` / `ipad` / `mac` / `apple-watch` / `airpods` / `vision-pro`
-- 該当セクションの適切な位置に挿入（紹介文の直後など文脈に合う場所）
-
-```markdown
-![{日本語キャプション}]({renamed-filename})
-*出典：Apple*
-```
-
-### 6. MDファイルの保存
-
-Page Bundle 形式で保存する。**以下の順番で実行すること。**
+### 7. 組み立て・コミット・後片付け（1回の Bash で）
 
 ```bash
-# ① ディレクトリ作成
-mkdir -p content/posts/{YYYY-MM-DD}-{slug}/
-
-# ② inbox/images/ にある画像をすべてコピー（-overview.jpg 含む）
-cp inbox/images/* content/posts/{YYYY-MM-DD}-{slug}/ 2>/dev/null || true
-
-# ③ index.md を保存（Write ツールで作成）
+P assemble {post_dir} \
+  && git add content/posts/{post_dir}/ \
+  && git commit -m "{イベント名} まとめ記事を追加" \
+  && P clean
 ```
 
-最終的な構造：
-```
-content/posts/{YYYY-MM-DD}-{slug}/
-├── index.md              ← 記事本文
-├── {product}-overview.jpg  ← ストーリーボードから取得したまとめスライド
-├── {other-image}.png     ← inbox/images/ から振り分けた画像
-└── ...
-```
+- `assemble` は、ヘッダ・全製品セクション・価格表を `---` でつないで `content/posts/{post_dir}/index.md` を作り、`inbox/images/` の画像をコピーする。`place` していないチャプターの c1 画像は、そのパートの最初の `##` の直後に自動で入れる
+- パートが足りないとエラーになる
+- `post_dir` は `fetch` が出した候補を使う（例：`2024-09-10-apple-event-september-2024`）。おかしい場合だけ直す
+- **push はしない。** コミットが完了したことをユーザーに伝えて終了する
 
-- slug はイベント名から生成（例：`wwdc-2026`）
+## inbox/images/ の手動画像
 
-### 7. ローカルコミット
+`inbox/images/` に `*-overview*.jpg` 以外の画像があれば、各画像を Vision で確認する。
 
-```bash
-git add content/posts/{YYYY-MM-DD}-{slug}/
-git commit -m "{イベント名} まとめ記事を追加"
-```
+- どの製品セクションの画像かを判定する
+- 内容を表す英語のケバブケース名 `{カテゴリ}-{トピック}.{拡張子}` にリネームする（例：`IMG_0012.png` → `iphone-variable-aperture.png`）
+  - カテゴリの例：`iphone` / `ipad` / `mac` / `apple-watch` / `airpods` / `vision-pro`
+  - 同じカテゴリ・トピックの画像が複数ある場合だけ、末尾に `-02`、`-03` を付ける
+- 手順6で該当パートの文脈に合う位置に挿入する
 
-**pushはしない。** コミット完了をユーザーに伝えて終了する。
+## URL なし（inbox/transcript.txt）の場合
 
-## inbox/ の後片付け
+- 1行目が YouTube URL なら、その URL で通常の手順を実行する
+- URL が無い場合は、メインが `inbox/transcript.txt` を読んで記事を直接書く（画像なし）
+  - 行頭のタイムスタンプ（`^\d+:\d+(?:\d+\s*分\s*\d+\s*秒|\d+\s*秒)`）は除去する
+  - 日付は `1970-01-01` を仮置きし、ユーザーに確認する
+- 保存先は `content/posts/{YYYY-MM-DD}-{slug}/index.md`。その後、手順7の git コマンドと `P clean` を実行する
 
-コミット後に実行（中間ファイルをすべて削除）：
+## 補足
 
-```bash
-# 字幕・storyboard・中間ファイルを削除
-rm -f inbox/*.vtt inbox/*.json inbox/*.mhtml
-rm -rf inbox/storyboard_frames/ inbox/chapter_grids/ inbox/sections/ inbox/section_frames/
-
-# transcript.txt の中身をクリア（ファイル自体は残す）
-> inbox/transcript.txt
-
-# images 内のファイルを削除（.gitkeep は残す）
-find inbox/images -not -name '.gitkeep' -not -path 'inbox/images' -delete
-```
-
-字幕ファイルは著作権上、長期保存しない（PLANの法律面の整理より）。
+- 映像は yt-dlp の既定（HDR 優先）を使わず、必ず SDR を取得する。HDR をそのまま JPEG にすると白っぽく暗い画像になるため
+- 動画や字幕は著作権上、長期保存しない。`P clean` で inbox の中間ファイルを削除する

@@ -12,6 +12,11 @@ defaultAppearance = "light"
 # OS のダークモード設定に自動で追従する
 autoSwitchAppearance = true
 
+# 目次：読んでいる位置をハイライトし、普段は h2（製品名）だけを表示。
+# 読んでいる h2 の配下の h3（トピック）だけを展開する
+smartTOC = true
+smartTOCHideUnfocusedChildren = true
+
 [footer]
   showThemeAttribution = false
 
