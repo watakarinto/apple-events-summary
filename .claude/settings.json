@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit(/inbox/article_parts/**)",
+      "Bash(uv run .claude/skills/apple-event/pipeline.py *)"
+    ]
+  }
+}

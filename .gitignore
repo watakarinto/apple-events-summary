@@ -17,3 +17,5 @@ inbox/images/*
 
 # PLANファイルは含めない
 PLAN.md
+__pycache__/
+*.pyc
