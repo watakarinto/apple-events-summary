@@ -12,7 +12,7 @@ summary: "刷新された「Siri AI」、Liquid Glass の改良、子どもの�
 
 ## Liquid Glass の改良
 
-![Liquid Glass の改良 の機能まとめ](maps-icon-liquid-glass.png)
+![Liquid Glass を纏った Maps アイコン](maps-icon-liquid-glass.png)
 *出典：Apple*
 
 **ハイライト**
@@ -250,7 +250,7 @@ Communication Safety は、ヌードが含まれる可能性のある画像・�
 
 ## Siri AI
 
-![Siri AI の機能まとめ](siri-ai-title.png)
+![Siri AI](siri-ai-title.png)
 *出典：Apple*
 
 **ハイライト**
