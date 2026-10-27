@@ -102,7 +102,7 @@ P place airpods-overview-2.jpg "AirPods Pro 2"   # 見出しは前方一致。�
 
 **ヘッダと価格表：**
 - `inbox/article_parts/00_header.md`：frontmatter と導入1〜2文だけを書く（製品の一覧はページの目次が兼ねるので書かない）。必要なら `intro_transcript` を Read してよい（短い）
-- `inbox/article_parts/99_summary.md`：`## 価格・発売日` の表だけを書く（ライターの返答から作る）。締めのコメントは書かない
+- `inbox/article_parts/99_summary.md`：`## 価格・発売日` の表だけを書く（ライターの返答から作る）。締めのコメントは書かない。価格はドルのまま書く。「日本円（参考）」の列と注記は、`assemble` が発表日の為替レートで自動的に足す（レートは `slides` が取得済み。自分で計算しない）
 - `---` 区切りは書かない（`assemble` が入れる）
 - 登壇者の名前や誰が話したか、宣伝文句は書かない。事実だけを書く
 - ライターの返答で価格・発売日が「言及なし」の製品は、発売情報が別チャプター（最後の製品など）でまとめて告知されていることが多い。`grep -n -i "pre-order\|available" inbox/chapter_transcripts/*.txt` で確認し、見つかれば価格表に反映する

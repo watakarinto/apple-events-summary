@@ -19,7 +19,9 @@ Apple Event まとめ記事パイプライン（/apple-event スキル用）
     uv run .claude/skills/apple-event/pipeline.py place <画像ファイル名> <見出し>
         画像を記事パーツの `## 見出し`（前方一致）の直後に置く（1チャプターに複数製品があるとき）
     uv run .claude/skills/apple-event/pipeline.py assemble <YYYY-MM-DD-slug>
-        inbox/article_parts/ を連結して content/posts/<dir>/index.md を作る
+        inbox/article_parts/ を連結して content/posts/<dir>/index.md を作る（価格表に日本円の参考値を自動で足す）
+    uv run .claude/skills/apple-event/pipeline.py yen <index.md> <発表日 YYYY-MM-DD>
+        既存の記事の価格表に、発表日のレートで日本円の参考値を足す
     uv run .claude/skills/apple-event/pipeline.py clean
         inbox の中間ファイルを削除する
 
@@ -179,12 +181,92 @@ def event_slug(title):
     return "-".join(tokens) or "apple-event"
 
 
-def event_date(info):
+def event_date(info, tz=JST):
     ts = info.get("release_timestamp") or info.get("timestamp")
     if ts:
-        return datetime.fromtimestamp(ts, JST).strftime("%Y-%m-%d")
+        return datetime.fromtimestamp(ts, tz).strftime("%Y-%m-%d")
     d = info.get("upload_date")
     return f"{d[:4]}-{d[4:6]}-{d[6:]}" if d else "1970-01-01"
+
+
+def fx_rate(date):
+    """date（YYYY-MM-DD）の USD/JPY を欧州中央銀行の参考レート（Frankfurter）から取る。休日は直前の営業日。"""
+    err = None
+    for url in (f"https://api.frankfurter.dev/v1/{date}?base=USD&symbols=JPY",
+                f"https://api.frankfurter.app/{date}?from=USD&to=JPY"):
+        try:
+            with urllib.request.urlopen(url, timeout=5) as r:
+                data = json.loads(r.read())
+            return {"date": data["date"], "usd_jpy": data["rates"]["JPY"], "event_date": date}
+        except Exception as e:  # noqa: BLE001
+            err = e
+    raise RuntimeError(f"為替レートを取得できませんでした: {err}")
+
+
+def fetch_fx(info):
+    """価格表の日本円（参考）用のレート。発表は米国時間なので UTC の日付で取る。失敗しても止めない。"""
+    try:
+        fx = fx_rate(event_date(info, timezone.utc))
+        log(f"為替: 1ドル＝{fx['usd_jpy']:g}円（{fx['date']}）")
+        return fx
+    except RuntimeError as e:
+        log(f"[warn] {e}（価格表に日本円は入りません）")
+        return None
+
+
+def format_yen(usd, rate):
+    v = int(round(usd * rate, -3))  # 1,000円単位
+    man, rest = divmod(v, 10000)
+    if man and rest:
+        return f"約{man}万{rest:,}円"
+    return f"約{man}万円" if man else f"約{rest:,}円"
+
+
+def jp_date(date):
+    y, m, d = (int(x) for x in date.split("-"))
+    return f"{y}年{m}月{d}日"
+
+
+def add_yen_column(md, fx):
+    """「価格」列を持つ最初の表に「日本円（参考）」列と注記を足す（ドル表記の価格だけを換算する）。"""
+    lines = md.splitlines()
+
+    def cells(line):
+        return [c.strip() for c in line.strip().strip("|").split("|")]
+
+    def row(cs):
+        return "| " + " | ".join(cs) + " |"
+
+    def convert(text):
+        out = []
+        for m in re.finditer(r"\$\s?([\d,]+(?:\.\d+)?)", text):
+            after = text[m.end():].lstrip()
+            suffix = "〜" if after.startswith(("〜", "から")) else ""
+            out.append(format_yen(float(m.group(1).replace(",", "")), fx["usd_jpy"]) + suffix)
+        return "／".join(out) or "—"
+
+    for i, line in enumerate(lines[:-1]):
+        if not (line.startswith("|") and re.match(r"^\|\s*:?-{2,}", lines[i + 1])):
+            continue
+        header = cells(line)
+        if not any("価格" in c for c in header) or any("日本円" in c for c in header):
+            continue
+        col = next(k for k, c in enumerate(header) if "価格" in c)
+        sep = cells(lines[i + 1])
+        out = [row(header[:col + 1] + ["日本円（参考）"] + header[col + 1:]),
+               row(sep[:col + 1] + ["------"] + sep[col + 1:])]
+        j = i + 2
+        while j < len(lines) and lines[j].startswith("|"):
+            cs = cells(lines[j])
+            yen = convert(cs[col]) if col < len(cs) else "—"
+            out.append(row(cs[:col + 1] + [yen] + cs[col + 1:]))
+            j += 1
+        when = "発表日" if fx["date"] == fx.get("event_date", fx["date"]) else "発表日直前の営業日"
+        note = (f"※日本円は{when}（{jp_date(fx['date'])}）の為替レート"
+                f"（1ドル＝{fx['usd_jpy']:g}円、欧州中央銀行の参考レート）で単純換算した参考値で、"
+                "日本での販売価格（税込）とは異なる。")
+        return "\n".join(lines[:i] + out + ["", note] + lines[j:])
+    return md
 
 
 def cmd_fetch(url):
@@ -634,6 +716,7 @@ def build_review_sheet(products, video):
 def cmd_slides(debug=False):
     manifest = load_json(MANIFEST, "fetch")
     info = load_json(INFO_JSON, "fetch")
+    fx_future = concurrent.futures.ThreadPoolExecutor(1).submit(fetch_fx, info)  # 映像の取得・解析と並行
     video = ensure_lowres(manifest)
     chapters = manifest["chapters"]
 
@@ -674,6 +757,8 @@ def cmd_slides(debug=False):
     build_review_sheet(products, video)
     SLIDES_JSON.write_text(json.dumps({"format_id": hires.fmt["format_id"], "products": products},
                                       ensure_ascii=False, indent=2), encoding="utf-8")
+    manifest["fx"] = fx_future.result()
+    MANIFEST.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     log("完了")
     emit({
         "review_sheet": rel(REVIEW_SHEET),
@@ -866,7 +951,11 @@ def cmd_assemble(post_dir, posts_root=None):
         if image.exists() and f"]({image.name})" not in placed:  # place 済みなら自動挿入しない
             md = insert_image(md, ch["title"], image.name)
         chunks.extend(split_sections(md))
-    chunks.append(strip_rules(summary.read_text(encoding="utf-8")))
+    summary_md = strip_rules(summary.read_text(encoding="utf-8"))
+    fx = manifest.get("fx") or (fetch_fx(load_json(INFO_JSON, "fetch")) if INFO_JSON.exists() else None)
+    if fx:
+        summary_md = add_yen_column(summary_md, fx)
+    chunks.append(summary_md)
     index = out_dir / "index.md"
     index.write_text("\n\n---\n\n".join(chunks) + "\n", encoding="utf-8")
 
@@ -877,6 +966,20 @@ def cmd_assemble(post_dir, posts_root=None):
                 shutil.copy2(p, out_dir / p.name)
                 copied.append(p.name)
     emit({"index": rel(index), "chars": len(index.read_text(encoding="utf-8")), "images": copied})
+
+
+def cmd_yen(path, date):
+    """既存の記事の価格表に、date（発表日・米国時間）のレートで日本円の参考値を足す。"""
+    index = Path(path)
+    if not index.exists():
+        fail(f"{path} がありません")
+    fx = fx_rate(date)
+    text = index.read_text(encoding="utf-8")
+    new = add_yen_column(text, fx)
+    if new == text:
+        fail("「価格」列のある表が見つからないか、すでに日本円の列があります")
+    index.write_text(new if new.endswith("\n") else new + "\n", encoding="utf-8")
+    emit({"index": rel(index), "fx": fx})
 
 
 def cmd_clean():
@@ -916,6 +1019,8 @@ def main(argv):
             cmd_sheet(*args)
         elif cmd == "place" and len(args) == 2:
             cmd_place(*args)
+        elif cmd == "yen" and len(args) == 2:
+            cmd_yen(*args)
         elif cmd == "assemble" and len(args) in (1, 2):
             cmd_assemble(*args)
         elif cmd == "clean":
