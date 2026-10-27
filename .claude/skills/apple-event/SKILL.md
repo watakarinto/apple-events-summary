@@ -94,6 +94,7 @@ P pick <slug> c2 --extra    # 追加画像として {image_slug}-overview-2.jpg 
 - `inbox/article_parts/99_summary.md`：まとめ表と締めの一言（ライターの3行サマリーから作る）
 - `---` 区切りは書かない（`assemble` が入れる）
 - 登壇者の名前や誰が話したか、宣伝文句は書かない。事実だけを書く
+- ライターの返答で価格・発売日が「言及なし」の製品は、発売情報が別チャプター（最後の製品など）でまとめて告知されていることが多い。`grep -n -i "pre-order\|available" inbox/chapter_transcripts/*.txt` で確認し、見つかればまとめ表と該当パートの表を直す
 - `--extra` で追加した画像や手動画像（後述）は、該当パートの「詳細」にある該当デバイスの `####` 見出しの直後に挿入する（パートは Read せず、見出しを grep して Edit または python で挿入する）
 
 ```markdown
