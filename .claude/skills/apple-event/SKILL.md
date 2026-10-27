@@ -42,14 +42,15 @@ Introduction などの製品以外のチャプターは除外済み。手動字�
 `chapters` の数だけ Agent を **1つのメッセージで** 起動する。`subagent_type: apple-event-writer` を指定し、prompt は次の3行だけにする（字幕の中身は貼らない。ライターが自分で読み、`part` に書き出す）。
 
 ```
-製品名: {title}
+チャプター: {title}
 字幕: {transcript}
 出力: {part}
 ```
 
 起動したら待たずに 3 へ進む。
 
-- 執筆ルール（構成・書かないもの）は `.claude/skills/apple-event/writer_rules.md` にあり、ライターが毎回最初に読む。記事の書き方を変えるときはこのファイルを直す
+- ライターはチャプター内の**製品ごとに** `## {製品名}` セクションを書く（例：チャプター「AirPods」→ AirPods 4／AirPods Max／AirPods Pro 2）
+- 執筆ルール（構成・セクションの分け方・書かないもの）は `.claude/skills/apple-event/writer_rules.md` にあり、ライターが毎回最初に読む。記事の書き方を変えるときはこのファイルを直す
 - `apple-event-writer` が使えない場合（セッション途中でエージェント定義を作成・変更した場合など）は、`subagent_type: general-purpose`・`model: sonnet`・`effort: medium` で起動する。prompt の先頭に「最初に .claude/skills/apple-event/writer_rules.md を Read し、そのルールに厳密に従う」と書く
 
 ### 3. まとめスライドを抽出（20〜30秒）
@@ -79,23 +80,34 @@ P pick <slug> none          # 画像なし
 P pick <slug> c2 --extra    # 追加画像として {image_slug}-overview-2.jpg に保存（c1 はそのまま）
 ```
 
-- `--extra` は、1チャプターに複数製品があり（例：AirPods 4 と AirPods Pro、Series と Ultra）、c2 以降が別製品のまとめスライドである場合に使う。追加した画像は手順6でパートに挿入する
+- `--extra` は、1チャプターに複数製品があり（例：AirPods 4 と AirPods Pro、Series と Ultra）、c2 以降が別製品のまとめスライドである場合に使う。どの画像がどの製品のものかを覚えておき、手順6で `place` する
 - c1〜c3 のどれも違う場合は `P sheet <slug> [開始秒 終了秒]` で一覧シートを作り、Read して秒数を決め、`P pick <slug> <秒>` を実行する
 - `[LOW CONFIDENCE]` が付いた製品は特に注意して見る
 - `pick` の出力の `match` が 0.9 未満なら、その画像を Read して確認する
 
 ### 5. ライターの完了を待つ
 
-各ライターの完了通知（`価格` / `発売日` / `要点` の3行）が全員分そろうまで待つ。ポーリングは不要。失敗したライターは同じ prompt で起動し直す。
+各ライターの完了通知（製品ごとに `- {製品名}｜価格: …｜発売日: …` の1行）が全員分そろうまで待つ。ポーリングは不要。失敗したライターは同じ prompt で起動し直す。
 
-### 6. ヘッダとまとめを書く（メインが書く本文はここだけ）
+### 6. 画像の配置、ヘッダと価格表（メインが書く本文はここだけ）
 
-- `inbox/article_parts/00_header.md`：frontmatter と冒頭のまとめ（必要なら `intro_transcript` を Read してよい。短い）
-- `inbox/article_parts/99_summary.md`：まとめ表と締めの一言（ライターの3行サマリーから作る）
+まず `grep "^## " inbox/article_parts/*.md` で製品セクションを確認する。
+
+**画像の配置：** 1チャプターに1製品なら何もしなくてよい（`assemble` が c1 の画像をセクションの先頭に自動で入れる）。1チャプターに複数製品がある場合は、そのチャプターの画像（c1 と `--extra` で追加したもの）を、すべて対応する製品に明示的に置く。まとめスライドが無い製品には置かない。
+
+```bash
+P place airpods-overview.jpg "AirPods 4"
+P place airpods-overview-2.jpg "AirPods Pro 2"   # 見出しは前方一致。置き直すと移動する
+```
+
+**ヘッダと価格表：**
+- `inbox/article_parts/00_header.md`：frontmatter と導入1〜2文だけを書く（製品の一覧はページの目次が兼ねるので書かない）。必要なら `intro_transcript` を Read してよい（短い）
+- `inbox/article_parts/99_summary.md`：`## 価格・発売日` の表だけを書く（ライターの返答から作る）。締めのコメントは書かない
 - `---` 区切りは書かない（`assemble` が入れる）
 - 登壇者の名前や誰が話したか、宣伝文句は書かない。事実だけを書く
-- ライターの返答で価格・発売日が「言及なし」の製品は、発売情報が別チャプター（最後の製品など）でまとめて告知されていることが多い。`grep -n -i "pre-order\|available" inbox/chapter_transcripts/*.txt` で確認し、見つかればまとめ表と該当パートの表を直す
-- `--extra` で追加した画像や手動画像（後述）は、該当パートの「詳細」にある該当デバイスの `####` 見出しの直後に挿入する（パートは Read せず、見出しを grep して Edit または python で挿入する）
+- ライターの返答で価格・発売日が「言及なし」の製品は、発売情報が別チャプター（最後の製品など）でまとめて告知されていることが多い。`grep -n -i "pre-order\|available" inbox/chapter_transcripts/*.txt` で確認し、見つかれば価格表に反映する
+
+**手動画像（後述）** は、該当パートの文脈に合う位置に Edit で挿入する。
 
 ```markdown
 ![{日本語キャプション}]({ファイル名})
@@ -114,22 +126,17 @@ tags: [{製品カテゴリ}, ...]
 summary: "イベントの概要を一言で（読者がクリックしたくなる文章）"
 ---
 
-{日付・場所・今年のキーワードを1〜2文で。}
-
-- **{デバイス名}**：{主な変更点を1行で（ライターの「要点」から）}
-- （発表されたデバイスの数だけ。チャプター内に複数デバイスがあれば分ける）
+{日付・場所・今年のテーマを1〜2文で。}
 ```
 
-`99_summary.md` のテンプレート：
+`99_summary.md` のテンプレート（モデルごとに価格が違えば行を分ける）：
 
 ```markdown
-## まとめ
+## 価格・発売日
 
 | 製品 | 価格 | 発売日 |
 |------|------|--------|
 | {製品名} | {価格} | {発売日} |
-
-{締めの一言。どの製品が特に注目か、どう選ぶかなどの軽い編集コメント。}
 ```
 
 ### 7. 組み立て・コミット・後片付け（1回の Bash で）
@@ -141,7 +148,7 @@ P assemble {post_dir} \
   && P clean
 ```
 
-- `assemble` は、ヘッダ・各パート（`## 見出し` の直後に c1 の画像を自動で挿入）・まとめを `---` でつないで `content/posts/{post_dir}/index.md` を作り、`inbox/images/` の画像をコピーする
+- `assemble` は、ヘッダ・全製品セクション・価格表を `---` でつないで `content/posts/{post_dir}/index.md` を作り、`inbox/images/` の画像をコピーする。`place` していないチャプターの c1 画像は、そのパートの最初の `##` の直後に自動で入れる
 - パートが足りないとエラーになる
 - `post_dir` は `fetch` が出した候補を使う（例：`2024-09-10-apple-event-september-2024`）。おかしい場合だけ直す
 - **push はしない。** コミットが完了したことをユーザーに伝えて終了する

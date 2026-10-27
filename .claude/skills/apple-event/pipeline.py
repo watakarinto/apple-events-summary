@@ -16,6 +16,8 @@ Apple Event まとめ記事パイプライン（/apple-event スキル用）
         画像を別候補・指定秒の静止画に差し替える（none で画像なし）
     uv run .claude/skills/apple-event/pipeline.py sheet <slug> [start end]
         低解像度映像から一覧シートを作る（手動で探すとき用）
+    uv run .claude/skills/apple-event/pipeline.py place <画像ファイル名> <見出し>
+        画像を記事パーツの `## 見出し`（前方一致）の直後に置く（1チャプターに複数製品があるとき）
     uv run .claude/skills/apple-event/pipeline.py assemble <YYYY-MM-DD-slug>
         inbox/article_parts/ を連結して content/posts/<dir>/index.md を作る
     uv run .claude/skills/apple-event/pipeline.py clean
@@ -779,15 +781,71 @@ def strip_rules(md, leading=True):
     return "\n".join(lines).strip()
 
 
+def image_block(heading, image_name):
+    return [f"![{heading} の機能まとめ]({image_name})", "*出典：Apple*"]
+
+
 def insert_image(md, title, image_name):
-    if f"]({image_name})" in md:
-        return md
-    block = f"![{title} 機能まとめ]({image_name})\n*出典：Apple*"
+    """最初の `## ` 見出しの直後に画像を入れる。キャプションはその見出しから作る。"""
     lines = md.splitlines()
     for i, line in enumerate(lines):
         if line.startswith("## "):
-            return "\n".join(lines[:i + 1] + ["", block] + lines[i + 1:])
-    return f"## {title}\n\n{block}\n\n{md}"
+            return "\n".join(lines[:i + 1] + [""] + image_block(line[3:].strip(), image_name) + lines[i + 1:])
+    return "\n".join([f"## {title}", ""] + image_block(title, image_name) + ["", md])
+
+
+def split_sections(md):
+    """パートを `## ` 見出しごとに分ける（1つのチャプターに複数製品がある場合）。"""
+    blocks, cur = [], []
+    for line in md.splitlines():
+        if line.startswith("## ") and any(c.strip() for c in cur):
+            blocks.append(strip_rules("\n".join(cur)))
+            cur = []
+        cur.append(line)
+    if any(c.strip() for c in cur):
+        blocks.append(strip_rules("\n".join(cur)))
+    return [b for b in blocks if b]
+
+
+def product_parts():
+    return sorted(p for p in PARTS.glob("[0-9][0-9]_*.md") if p.name not in ("00_header.md", "99_summary.md"))
+
+
+def cmd_place(image_name, heading):
+    """画像を、指定した `## ` 見出し（前方一致）の直後に置く。別の場所に置いてあれば移動する。"""
+    image_name = Path(image_name).name
+    if not (IMAGES / image_name).exists():
+        fail(f"inbox/images/{image_name} がありません")
+    found = []
+    for part in product_parts():
+        for line in part.read_text(encoding="utf-8").splitlines():
+            if line.startswith("## "):
+                found.append((part, line[3:].strip()))
+    exact = [f for f in found if f[1] == heading]
+    prefix = [f for f in found if f[1].startswith(heading)]
+    target = exact or prefix
+    if len(target) != 1:
+        fail(f"見出し {heading!r} を1つに特定できません（候補: {' / '.join(h for _, h in found)}）")
+    target_part, target_heading = target[0]
+
+    for part in product_parts():  # 既存の配置を消す（移動）
+        lines, out, skip_credit = part.read_text(encoding="utf-8").splitlines(), [], False
+        for line in lines:
+            if line.startswith("![") and line.endswith(f"]({image_name})"):
+                skip_credit = True
+                continue
+            if skip_credit and line.strip() == "*出典：Apple*":
+                skip_credit = False
+                continue
+            skip_credit = False
+            out.append(line)
+        text = re.sub(r"\n{3,}", "\n\n", "\n".join(out))
+        if part == target_part:
+            lines = text.splitlines()
+            i = next(k for k, line in enumerate(lines) if line.startswith("## ") and line[3:].strip() == target_heading)
+            text = "\n".join(lines[:i + 1] + [""] + image_block(target_heading, image_name) + lines[i + 1:])
+        part.write_text(text.rstrip() + "\n", encoding="utf-8")
+    emit({"image": image_name, "part": rel(target_part), "heading": target_heading})
 
 
 def cmd_assemble(post_dir, posts_root=None):
@@ -800,13 +858,14 @@ def cmd_assemble(post_dir, posts_root=None):
 
     out_dir = Path(posts_root) / post_dir if posts_root else POSTS / post_dir
     out_dir.mkdir(parents=True, exist_ok=True)
+    texts = [strip_rules(p.read_text(encoding="utf-8")) for p in parts]
+    placed = "\n".join(texts)
     chunks = [strip_rules(header.read_text(encoding="utf-8"), leading=False)]
-    for ch, part in zip(manifest["chapters"], parts, strict=True):
-        md = strip_rules(part.read_text(encoding="utf-8"))
+    for ch, md in zip(manifest["chapters"], texts, strict=True):
         image = IMAGES / f"{ch['image_slug']}-overview.jpg"
-        if image.exists():
+        if image.exists() and f"]({image.name})" not in placed:  # place 済みなら自動挿入しない
             md = insert_image(md, ch["title"], image.name)
-        chunks.append(md)
+        chunks.extend(split_sections(md))
     chunks.append(strip_rules(summary.read_text(encoding="utf-8")))
     index = out_dir / "index.md"
     index.write_text("\n\n---\n\n".join(chunks) + "\n", encoding="utf-8")
@@ -855,6 +914,8 @@ def main(argv):
             cmd_pick(*[a for a in args if a != "--extra"], extra="--extra" in args)
         elif cmd == "sheet" and len(args) in (1, 3):
             cmd_sheet(*args)
+        elif cmd == "place" and len(args) == 2:
+            cmd_place(*args)
         elif cmd == "assemble" and len(args) in (1, 2):
             cmd_assemble(*args)
         elif cmd == "clean":
