@@ -49,6 +49,9 @@ Introduction などの製品以外のチャプターは除外済み。手動字�
 
 起動したら待たずに 3 へ進む。
 
+- 執筆ルール（構成・書かないもの）は `.claude/skills/apple-event/writer_rules.md` にあり、ライターが毎回最初に読む。記事の書き方を変えるときはこのファイルを直す
+- `apple-event-writer` が使えない場合は、`subagent_type: general-purpose`・`model: sonnet` で起動する。prompt の先頭に「最初に .claude/skills/apple-event/writer_rules.md を Read し、そのルールに厳密に従う」と書く
+
 ### 3. まとめスライドを抽出（20〜30秒）
 
 ```bash
@@ -90,7 +93,8 @@ P pick <slug> c2 --extra    # 追加画像として {image_slug}-overview-2.jpg 
 - `inbox/article_parts/00_header.md`：frontmatter と冒頭のまとめ（必要なら `intro_transcript` を Read してよい。短い）
 - `inbox/article_parts/99_summary.md`：まとめ表と締めの一言（ライターの3行サマリーから作る）
 - `---` 区切りは書かない（`assemble` が入れる）
-- `--extra` で追加した画像や手動画像（後述）は、該当パートの該当 `###` 見出しの直後に Edit で挿入する
+- 登壇者の名前や誰が話したか、宣伝文句は書かない。事実だけを書く
+- `--extra` で追加した画像や手動画像（後述）は、該当パートの「詳細」にある該当デバイスの `####` 見出しの直後に挿入する（パートは Read せず、見出しを grep して Edit または python で挿入する）
 
 ```markdown
 ![{日本語キャプション}]({ファイル名})
@@ -109,7 +113,10 @@ tags: [{製品カテゴリ}, ...]
 summary: "イベントの概要を一言で（読者がクリックしたくなる文章）"
 ---
 
-{イベント全体の冒頭まとめ。日付・場所・今年のキーワード・発表製品を2〜3文で。}
+{日付・場所・今年のキーワードを1〜2文で。}
+
+- **{デバイス名}**：{主な変更点を1行で（ライターの「要点」から）}
+- （発表されたデバイスの数だけ。チャプター内に複数デバイスがあれば分ける）
 ```
 
 `99_summary.md` のテンプレート：
