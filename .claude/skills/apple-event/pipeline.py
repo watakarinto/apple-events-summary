@@ -227,8 +227,14 @@ def jp_date(date):
     return f"{y}年{m}月{d}日"
 
 
+CONSUMPTION_TAX = 0.10  # 米国の価格は税抜きなので、日本円の参考値には消費税を足す
+
+
 def add_yen_column(md, fx):
-    """「価格」列を持つ最初の表に「日本円（参考）」列と注記を足す（ドル表記の価格だけを換算する）。"""
+    """「価格」列を持つ最初の表に「日本円（参考・税込）」列と注記を足す（ドル表記の価格だけを換算する）。
+
+    すでに日本円の列と注記があれば置き換える。
+    """
     lines = md.splitlines()
 
     def cells(line):
@@ -237,35 +243,46 @@ def add_yen_column(md, fx):
     def row(cs):
         return "| " + " | ".join(cs) + " |"
 
+    def drop(cs, k):
+        return cs if k is None else cs[:k] + cs[k + 1:]
+
     def convert(text):
         out = []
         for m in re.finditer(r"\$\s?([\d,]+(?:\.\d+)?)", text):
             after = text[m.end():].lstrip()
             suffix = "〜" if after.startswith(("〜", "から")) else ""
-            out.append(format_yen(float(m.group(1).replace(",", "")), fx["usd_jpy"]) + suffix)
+            usd = float(m.group(1).replace(",", ""))
+            out.append(format_yen(usd, fx["usd_jpy"] * (1 + CONSUMPTION_TAX)) + suffix)
         return "／".join(out) or "—"
 
     for i, line in enumerate(lines[:-1]):
         if not (line.startswith("|") and re.match(r"^\|\s*:?-{2,}", lines[i + 1])):
             continue
         header = cells(line)
-        if not any("価格" in c for c in header) or any("日本円" in c for c in header):
+        if not any("価格" in c for c in header):
             continue
+        old = next((k for k, c in enumerate(header) if "日本円" in c), None)
+        header, sep = drop(header, old), drop(cells(lines[i + 1]), old)
         col = next(k for k, c in enumerate(header) if "価格" in c)
-        sep = cells(lines[i + 1])
-        out = [row(header[:col + 1] + ["日本円（参考）"] + header[col + 1:]),
+        out = [row(header[:col + 1] + ["日本円（参考・税込）"] + header[col + 1:]),
                row(sep[:col + 1] + ["------"] + sep[col + 1:])]
         j = i + 2
         while j < len(lines) and lines[j].startswith("|"):
-            cs = cells(lines[j])
+            cs = drop(cells(lines[j]), old)
             yen = convert(cs[col]) if col < len(cs) else "—"
             out.append(row(cs[:col + 1] + [yen] + cs[col + 1:]))
             j += 1
+        rest = lines[j:]
+        k = 0
+        while k < len(rest) and not rest[k].strip():
+            k += 1
+        if k < len(rest) and rest[k].startswith("※日本円は"):  # 前回の注記は置き換える
+            rest = rest[k + 1:]
         when = "発表日" if fx["date"] == fx.get("event_date", fx["date"]) else "発表日直前の営業日"
-        note = (f"※日本円は{when}（{jp_date(fx['date'])}）の為替レート"
-                f"（1ドル＝{fx['usd_jpy']:g}円、欧州中央銀行の参考レート）で単純換算した参考値で、"
-                "日本での販売価格（税込）とは異なる。")
-        return "\n".join(lines[:i] + out + ["", note] + lines[j:])
+        note = (f"※日本円は、米国の価格（税抜き）を{when}（{jp_date(fx['date'])}）の為替レート"
+                f"（1ドル＝{fx['usd_jpy']:g}円、欧州中央銀行の参考レート）で換算し、"
+                f"消費税{CONSUMPTION_TAX:.0%}を加えた参考値。実際の日本での販売価格とは異なる。")
+        return "\n".join(lines[:i] + out + ["", note] + rest)
     return md
 
 
@@ -976,8 +993,8 @@ def cmd_yen(path, date):
     fx = fx_rate(date)
     text = index.read_text(encoding="utf-8")
     new = add_yen_column(text, fx)
-    if new == text:
-        fail("「価格」列のある表が見つからないか、すでに日本円の列があります")
+    if new.rstrip("\n") == text.rstrip("\n"):
+        fail("「価格」列のある表が見つからないか、すでに同じ内容です")
     index.write_text(new if new.endswith("\n") else new + "\n", encoding="utf-8")
     emit({"index": rel(index), "fx": fx})
 
