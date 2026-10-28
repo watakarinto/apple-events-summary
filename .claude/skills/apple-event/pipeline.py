@@ -251,12 +251,13 @@ def add_yen_column(md, fx):
         out = []
         for m in re.finditer(r"\$\s?([\d,]+(?:\.\d+)?)", text):
             after = text[m.end():].lstrip()
-            suffix = "〜" if after.startswith(("〜", "から")) else ""
+            suffix = "〜" if after.startswith(("〜", "～", "から")) else ""
             usd = float(m.group(1).replace(",", ""))
             out.append(format_yen(usd, fx["usd_jpy"] * (1 + CONSUMPTION_TAX)) + suffix)
         return "／".join(out) or "—"
 
-    for i, line in enumerate(lines[:-1]):
+    for i in reversed(range(len(lines) - 1)):  # 価格表は記事の最後にある。本文中の表は触らない
+        line = lines[i]
         if not (line.startswith("|") and re.match(r"^\|\s*:?-{2,}", lines[i + 1])):
             continue
         header = cells(line)
